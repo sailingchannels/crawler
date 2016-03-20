@@ -289,7 +289,7 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 			detectlanguage.configuration.api_key = config.detectLanguage()[useDetectLangKey]
 
 			# detect the language of the channel
-			if not hasLanguage:
+			if not hasLanguage and devMode == False:
 
 				channels[subChannelId]["language"] = "en"
 
