@@ -125,7 +125,9 @@ def storeVideoStats(channelId, vid):
 			try:
 				msg = "New: " + ch["title"] + " \"" + dbVid["title"] + "\" https://sailing-channels.com/video/" + dbVid["_id"]
 				if devMode <> True:
-					twitter.update_status(status=msg)
+					photo = requests.get("https://img.youtube.com/vi/" + dbVid["_id"] + "/hqdefault.jpg").content
+					response = twitter.upload_media(media=photo)
+					twitter.update_status(status=msg, media_ids=[response['media_id']])
 				else:
 					print msg
 
