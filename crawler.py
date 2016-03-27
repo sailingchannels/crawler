@@ -81,6 +81,9 @@ channels = {}
 def deleteChannel(channelId):
 	db.channels.delete_one({"_id": channelId})
 	db.videos.delete_many({"channel": channelId})
+	db.views.delete_many({"_id.channel": channelId})
+	db.visits.delete_many({"channel": channelId})
+	db.subscribers.delete_many({"_id.channel": channelId})
 
 # STORE VIDEO STATS
 def storeVideoStats(channelId, vid):
