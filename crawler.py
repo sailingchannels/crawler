@@ -288,8 +288,10 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 			# get popularity
 			#try:
 			popSub, popView = getChannelPopularityIndex(subChannelId, int(stats["subscriberCount"]), int(stats["viewCount"]))
-			channels[subChannelId]["popularity"]["subscribers"] = popSub
-			channels[subChannelId]["popularity"]["views"] = popView
+			channels[subChannelId]["popularity"] = {
+				"subscribers": popSub,
+				"views": popView
+			}
 			#except:
 			#	pass
 
