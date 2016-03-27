@@ -488,6 +488,18 @@ def addAdditionalSubscriptions():
 			# add this channel
 			addSingleChannel(cc["_id"], result["items"][0], 0, False, True)
 
+# READ CURRENT CHANNELS
+def readCurrentChannels():
+
+	for cc in db.channels.find({}, projection=["_id"]):
+
+		# get info of additional channel
+		r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + cc["_id"] + "&key=" + config.apiKey())
+		result = r.json()
+
+		addSingleChannel(cc["_id"], result["items"][0], 0, True, False)
+
+readCurrentChannels()
 readSubscriptions(startChannelId, 1)
 addAdditionalSubscriptions()
 
