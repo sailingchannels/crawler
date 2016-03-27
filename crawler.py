@@ -47,6 +47,8 @@ class ThreadPool:
 # config
 startChannelId = "UC5xDht2blPNWdVtl9PkDmgA" # SailLife
 maxLevels = 4
+popSubsWeight = 0.4
+popViewsWeight = 0.6
 sailingTerms = []
 blacklist = []
 
@@ -293,7 +295,8 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 			popSub, popView = getChannelPopularityIndex(subChannelId, int(stats["subscriberCount"]), int(stats["viewCount"]))
 			channels[subChannelId]["popularity"] = {
 				"subscribers": popSub,
-				"views": popView
+				"views": popView,
+				"total": popSub * popSubsWeight + popView * popViewsWeight
 			}
 			#except:
 			#	pass
