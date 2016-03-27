@@ -219,14 +219,14 @@ def getChannelPopularityIndex(channelId, subscribers, views):
 
 	sevenDaysSubs = db.subscribers.find_one({
 		"_id": {
-			"channel": subChannelId,
+			"channel": channelId,
 			"date": int(sevenDaysAgo.strftime("%Y%m%d"))
 		}
 	})
 
 	sevenDaysViews = db.subscribers.find_one({
 		"_id": {
-			"channel": subChannelId,
+			"channel": channelId,
 			"date": int(sevenDaysAgo.strftime("%Y%m%d"))
 		}
 	})
