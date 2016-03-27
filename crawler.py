@@ -209,6 +209,38 @@ def readStatistics(channelId):
 	stats = r.json()
 	return stats["items"][0]["statistics"], stats["items"][0]["snippet"]
 
+# GET CHANNEL POPULARITY INDEX
+def getChannelPopularityIndex(channelId, subscribers, views):
+
+	# fetch subs and views from 7 days ago
+	sevenDaysAgo = date.today() - timedelta(days = 7)
+
+	sevenDaysSubs = db.subscribers.find_one({
+		"_id": {
+			"channel": subChannelId,
+			"date": int(sevenDaysAgo.strftime("%Y%m%d"))
+		}
+	})
+
+	sevenDaysViews = db.subscribers.find_one({
+		"_id": {
+			"channel": subChannelId,
+			"date": int(sevenDaysAgo.strftime("%Y%m%d"))
+		}
+	})
+
+	popSub = 0
+	popView = 0
+
+	# calculate subscriber gain
+	if subscribers > 0 and sevenDaysSubs > 0:
+		popSub = math.fabs(subscribers - sevenDaysSubs) / subscribers
+
+	if views > 0 and sevenDaysViews > 0:
+		popView = math.fabs(views - sevenDaysViews) / views
+
+	return popSub, popView
+
 # ADD SINGLE CHANNEL
 def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm = False):
 
@@ -250,6 +282,14 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 				"subscribersHidden": bool(stats["hiddenSubscriberCount"]),
 				"lastCrawl": datetime.now()
 			}
+
+			# get popularity
+			#try:
+			popSub, popView = getChannelPopularityIndex(subChannelId, int(stats["subscriberCount"]), int(stats["viewCount"]))
+			channels[subChannelId]["popularity"]["subscribers"] = popSub
+			channels[subChannelId]["popularity"]["views"] = popView
+			#except:
+			#	pass
 
 			# read the videos
 			channelVideos = readVideos(subChannelId)
