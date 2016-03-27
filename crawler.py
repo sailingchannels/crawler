@@ -215,31 +215,34 @@ def readStatistics(channelId):
 def getChannelPopularityIndex(channelId, subscribers, views):
 
 	# fetch subs and views from 7 days ago
-	sevenDaysAgo = date.today() - timedelta(days = 7)
+	daysAgo = date.today() - timedelta(days = 7)
 
-	sevenDaysSubs = db.subscribers.find_one({
+	daysSubs = db.subscribers.find_one({
 		"_id": {
 			"channel": channelId,
-			"date": int(sevenDaysAgo.strftime("%Y%m%d"))
+			"date": int(daysAgo.strftime("%Y%m%d"))
 		}
 	})
 
-	sevenDaysViews = db.subscribers.find_one({
+	daysViews = db.subscribers.find_one({
 		"_id": {
 			"channel": channelId,
-			"date": int(sevenDaysAgo.strftime("%Y%m%d"))
+			"date": int(daysAgo.strftime("%Y%m%d"))
 		}
 	})
 
 	popSub = 0
 	popView = 0
 
-	# calculate subscriber gain
-	if subscribers > 0 and sevenDaysSubs is not None and sevenDaysSubs.has_key("subscribers"):
-		popSub = math.fabs(subscribers - sevenDaysSubs["subscribers"]) / subscribers
+	print "subs ", subscribers, daysSubs["subscribers"]
+	print "views", views, daysSubs["views"]
 
-	if views > 0 and sevenDaysViews is not None and sevenDaysViews.has_key("views"):
-		popView = math.fabs(views - sevenDaysViews["views"]) / views
+	# calculate subscriber gain
+	if subscribers > 0 and daysSubs is not None and daysSubs.has_key("subscribers"):
+		popSub = math.fabs(subscribers - daysSubs["subscribers"]) / subscribers
+
+	if views > 0 and daysViews is not None and daysViews.has_key("views"):
+		popView = math.fabs(views - daysViews["views"]) / views
 
 	return popSub, popView
 
