@@ -236,10 +236,10 @@ def getChannelPopularityIndex(channelId, subscribers, views):
 
 	# calculate subscriber gain
 	if subscribers > 0 and sevenDaysSubs != None:
-		popSub = math.fabs(subscribers - sevenDaysSubs.subscribers) / subscribers
+		popSub = math.fabs(subscribers - sevenDaysSubs["subscribers"]) / subscribers
 
 	if views > 0 and sevenDaysViews != None:
-		popView = math.fabs(views - sevenDaysViews.views) / views
+		popView = math.fabs(views - sevenDaysViews["views"]) / views
 
 	return popSub, popView
 
