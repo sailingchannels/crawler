@@ -279,7 +279,7 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 			pd = datetime.strptime(channel_detail["publishedAt"], "%Y-%m-%dT%H:%M:%S.000Z")
 
 			channels[subChannelId] = {
-				"id": subChannelId, # TODO: can go if switched to mongodb
+				"id": subChannelId, 
 				"title": i["snippet"]["title"],
 				"description": i["snippet"]["description"],
 				"publishedAt": calendar.timegm(pd.utctimetuple()),
