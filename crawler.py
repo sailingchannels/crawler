@@ -335,34 +335,38 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 				if ch_lang.has_key("detectedLanguage"):
 					hasLanguage = True
 
-			useDetectLangKey = 0
-			detectlanguage.configuration.api_key = config.detectLanguage()[useDetectLangKey]
-
-			# detect the language of the channel
-			if not hasLanguage and devMode == False:
-
-				channels[subChannelId]["language"] = "en"
-
-				runLoop = True
-				while runLoop:
-					try:
-						detectedLang = detectlanguage.detect(lotsOfText)
-						runLoop = False
-					except:
-						useDetectLangKey = useDetectLangKey + 1
-
-						if useDetectLangKey > len(config.detectLanguage()):
-							 runLoop = False
-						else:
-							detectlanguage.configuration.api_key = config.detectLanguage()[useDetectLangKey]
-
-				# did we find a language in the text body?
-				if len(detectedLang) > 0:
-
-					# is the detection reliable?
-					if detectedLang[0]["isReliable"]:
-						channels[subChannelId]["language"] = detectedLang[0]["language"]
-						channels[subChannelId]["detectedLanguage"] = True
+			try:
+	
+				useDetectLangKey = 0
+				detectlanguage.configuration.api_key = config.detectLanguage()[useDetectLangKey]
+	
+				# detect the language of the channel
+				if not hasLanguage and devMode == False:
+	
+					channels[subChannelId]["language"] = "en"
+	
+					runLoop = True
+					while runLoop:
+						try:
+							detectedLang = detectlanguage.detect(lotsOfText)
+							runLoop = False
+						except:
+							useDetectLangKey = useDetectLangKey + 1
+	
+							if useDetectLangKey > len(config.detectLanguage()):
+								 runLoop = False
+							else:
+								detectlanguage.configuration.api_key = config.detectLanguage()[useDetectLangKey]
+	
+					# did we find a language in the text body?
+					if len(detectedLang) > 0:
+	
+						# is the detection reliable?
+						if detectedLang[0]["isReliable"]:
+							channels[subChannelId]["language"] = detectedLang[0]["language"]
+							channels[subChannelId]["detectedLanguage"] = True
+			except:
+				pass
 
 			# insert subscriber counts
 			try:
