@@ -5,7 +5,6 @@ import detectlanguage
 from Queue import Queue
 from threading import Thread
 from twython import Twython
-from facepy import GraphAPI
 
 # social networks
 twitter = Twython(config.twitter()["consumerKey"], config.twitter()["consumerSecret"], config.twitter()["accessToken"], config.twitter()["accessSecret"])
@@ -130,8 +129,6 @@ def storeVideoStats(channelId, vid):
 			try:
 				msg = "New: " + ch["title"] + " \"" + dbVid["title"] + "\" https://sailing-channels.com/video/" + dbVid["_id"]
 				if devMode <> True:
-					#photo = requests.get("https://img.youtube.com/vi/" + dbVid["_id"] + "/hqdefault.jpg").content
-					#response = twitter.upload_media(media=photo)
 					twitter.update_status(status=msg)
 				else:
 					print msg
@@ -212,15 +209,15 @@ def readVideos(channelId):
 # READ STATISTICS
 def readStatistics(channelId):
 
-	r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=" + channelId + "&key=" + config.apiKey())
+	r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,brandingSettings&id=" + channelId + "&key=" + config.apiKey())
 	stats = r.json()
-	return stats["items"][0]["statistics"], stats["items"][0]["snippet"]
+	return stats["items"][0]["statistics"], stats["items"][0]["snippet"], stats["items"][0]["brandingSettings"]
 
 # GET CHANNEL POPULARITY INDEX
 def getChannelPopularityIndex(channelId, subscribers, views):
 
 	# fetch subs and views from 7 days ago
-	daysAgo = date.today() - timedelta(days = 3)
+	daysAgo = date.today() - timedelta(days = 2)
 
 	daysSubs = db.subscribers.find_one({
 		"_id": {
@@ -254,7 +251,7 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 	# store this channel
 	if not channels.has_key(subChannelId):
 
-		stats, channel_detail = readStatistics(subChannelId)
+		stats, channel_detail, branding_settings = readStatistics(subChannelId)
 		hasSailingTerm = False
 
 		# check if one of the sailing terms is available
@@ -289,6 +286,23 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 				"subscribersHidden": bool(stats["hiddenSubscriberCount"]),
 				"lastCrawl": datetime.now()
 			}
+
+			# try to read custom links of channel
+			try:
+				rd = requests.get("https://sailing-channels.com/api/channel/get/" + subChannelId + "/customlinks")
+				
+				if rd.status_code == 200:
+					customLinks = rd.json()
+					channels[subChannelId]["customLinks"] = customLinks
+			except:
+				pass
+
+			# add keywords if available
+			try:
+				if "keywords" in branding_settings["channel"]:
+					channels[subChannelId]["keywords"] = branding_settings["channel"]["keywords"].split(" ")
+			except:
+				pass
 
 			# get popularity
 			#try:
