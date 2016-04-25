@@ -333,9 +333,9 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 			# channel is older than
 			aYearAgoDate = date.today() - timedelta(days=365)
 			aYearAgoUnix = calendar.timegm(aYearAgoDate.timetuple())
-			if maxVideoAge < aYearAgoUnix:
-				deleteChannel(subChannelId)
-				return
+			# if maxVideoAge < aYearAgoUnix:
+			# 	deleteChannel(subChannelId)
+			# 	return
 
 			channels[subChannelId]["lastUploadAt"] = maxVideoAge
 
