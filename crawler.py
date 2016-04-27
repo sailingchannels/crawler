@@ -46,8 +46,8 @@ class ThreadPool:
 # config
 startChannelId = "UC5xDht2blPNWdVtl9PkDmgA" # SailLife
 maxLevels = 4
-popSubsWeight = 0.4
-popViewsWeight = 0.6
+popSubsWeight = 0.5
+popViewsWeight = 0.5
 sailingTerms = []
 blacklist = []
 
@@ -90,7 +90,7 @@ def deleteChannel(channelId):
 def storeVideoStats(channelId, vid):
 
 	# fetch video statistics
-	rd = requests.get("https://www.googleapis.com/youtube/v3/videos?part=statistics&id=" + vid["id"] + "&key=" + config.apiKey())
+	rd = requests.get("https://www.googleapis.com/youtube/v3/videos?part=statistics,status&id=" + vid["id"] + "&key=" + config.apiKey())
 	videoStat = rd.json()
 	statistics = None
 
@@ -110,41 +110,52 @@ def storeVideoStats(channelId, vid):
 		if statistics.has_key("commentCount"):
 			vid["comments"] = int(statistics["commentCount"])
 
-	# prepare video for inserting into database
-	dbVid = vid
-	dbVid["_id"] = dbVid["id"]
-	dbVid["channel"] = channelId
-	del dbVid["id"]
+	# status of video
+	status = videoStat["items"][0]["status"]
 
-	try:
-		# check if this video exists in database
-		vid_exists = db.videos.count({"_id": dbVid["_id"]})
+	if status["privacyStatus"] == "public":
 
-		# reasonable fresh video, post to twitter and facebook
-		if vid_exists == 0 and math.fabs(int(dbVid["publishedAt"]) - time.mktime(datetime.utcnow().timetuple())) <= 15000:
+		# prepare video for inserting into database
+		dbVid = vid
+		dbVid["_id"] = dbVid["id"]
+		dbVid["channel"] = channelId
+		del dbVid["id"]
 
-			ch = db.channels.find_one({"_id": channelId}, projection=["title"])
+		try:
+			# check if this video exists in database
+			vid_exists = db.videos.count({"_id": dbVid["_id"]})
 
-			# twitter
-			try:
-				msg = "New: " + ch["title"] + " \"" + dbVid["title"] + "\" https://sailing-channels.com/video/" + dbVid["_id"]
-				if devMode <> True:
-					twitter.update_status(status=msg)
-				else:
-					print msg
+			# reasonable fresh video, post to twitter and facebook
+			if vid_exists == 0 and math.fabs(int(dbVid["publishedAt"]) - time.mktime(datetime.utcnow().timetuple())) <= 15000:
 
-			except Exception, e:
-				print e
+				ch = db.channels.find_one({"_id": channelId}, projection=["title"])
 
-		# update information in database
-		db.videos.update_one({
-			"_id": dbVid["_id"]
-		}, {
-			"$set": dbVid
-		}, True)
+				# twitter
+				try:
+					msg = "New: " + ch["title"] + " \"" + dbVid["title"] + "\" https://sailing-channels.com/video/" + dbVid["_id"]
+					if devMode <> True:
+						twitter.update_status(status=msg)
+					else:
+						print msg
 
-	except:
-		pass
+				except Exception, e:
+					print e
+
+			# update information in database
+			db.videos.update_one({
+				"_id": dbVid["_id"]
+			}, {
+				"$set": dbVid
+			}, True)
+
+		except:
+			pass
+	else:
+
+		# remove non public videos
+		db.videos.delete_one({
+			"_id": dbVid["id"]
+		})
 
 # READ VIDEOS PAGE
 def readVideosPage(channelId, pageToken = None):
@@ -329,13 +340,6 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 				lotsOfText += vid["description"] + " "
 				if vid["publishedAt"] > maxVideoAge:
 					maxVideoAge = vid["publishedAt"]
-
-			# channel is older than
-			aYearAgoDate = date.today() - timedelta(days=365)
-			aYearAgoUnix = calendar.timegm(aYearAgoDate.timetuple())
-			# if maxVideoAge < aYearAgoUnix:
-			# 	deleteChannel(subChannelId)
-			# 	return
 
 			channels[subChannelId]["lastUploadAt"] = maxVideoAge
 
