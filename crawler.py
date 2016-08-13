@@ -308,6 +308,12 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 			except:
 				pass
 
+			# try to read position of channel
+			try:
+				cpd = requests.get("https://sailing-channels.com/api/channel/get/" + subChannelId)
+			except:
+				pass
+
 			# add keywords if available
 			try:
 				if "keywords" in branding_settings["channel"]:
