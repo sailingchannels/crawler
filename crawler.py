@@ -45,7 +45,7 @@ class ThreadPool:
 
 # config
 startChannelId = "UC5xDht2blPNWdVtl9PkDmgA" # SailLife
-maxLevels = 4
+maxLevels = 3
 popSubsWeight = 0.5
 popViewsWeight = 0.5
 sailingTerms = []
@@ -56,7 +56,7 @@ client = MongoClient(config.mongoDB())
 db_name = "sailing-channels"
 devMode = False
 
-pool = ThreadPool(16)
+pool = ThreadPool(4)
 
 if len(sys.argv) != 2:
 	db_name += "-dev"
@@ -287,7 +287,7 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 			pd = datetime.strptime(channel_detail["publishedAt"], "%Y-%m-%dT%H:%M:%S.000Z")
 
 			channels[subChannelId] = {
-				"id": subChannelId, 
+				"id": subChannelId,
 				"title": i["snippet"]["title"],
 				"description": i["snippet"]["description"],
 				"publishedAt": calendar.timegm(pd.utctimetuple()),
@@ -301,7 +301,7 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 			# try to read custom links of channel
 			try:
 				rd = requests.get("https://sailing-channels.com/api/channel/get/" + subChannelId + "/customlinks")
-				
+
 				if rd.status_code == 200:
 					customLinks = rd.json()
 					channels[subChannelId]["customLinks"] = customLinks
@@ -360,15 +360,15 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 					hasLanguage = True
 
 			try:
-	
+
 				useDetectLangKey = 0
 				detectlanguage.configuration.api_key = config.detectLanguage()[useDetectLangKey]
-	
+
 				# detect the language of the channel
 				if not hasLanguage and devMode == False:
-	
+
 					channels[subChannelId]["language"] = "en"
-	
+
 					runLoop = True
 					while runLoop:
 						try:
@@ -376,15 +376,15 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 							runLoop = False
 						except:
 							useDetectLangKey = useDetectLangKey + 1
-	
+
 							if useDetectLangKey > len(config.detectLanguage()):
 								 runLoop = False
 							else:
 								detectlanguage.configuration.api_key = config.detectLanguage()[useDetectLangKey]
-	
+
 					# did we find a language in the text body?
 					if len(detectedLang) > 0:
-	
+
 						# is the detection reliable?
 						if detectedLang[0]["isReliable"]:
 							channels[subChannelId]["language"] = detectedLang[0]["language"]

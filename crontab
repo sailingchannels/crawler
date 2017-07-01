@@ -1,0 +1,1 @@
+15,45 * * * *  root python /srv/crawler.py /srv/ >> /var/log/cron.log 2>&1
