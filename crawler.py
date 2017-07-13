@@ -510,10 +510,13 @@ def addAdditionalSubscriptions():
 			r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + cc["_id"] + "&key=" + config.apiKey())
 			result = r.json()
 
-			print "additional ", cc["_id"]
+			try:
+				print "additional ", cc["_id"]
 
-			# add this channel
-			addSingleChannel(cc["_id"], result["items"][0], 0, False, True)
+				# add this channel
+				addSingleChannel(cc["_id"], result["items"][0], 0, False, True)
+			except:
+				pass
 
 # READ CURRENT CHANNELS
 def readCurrentChannels():
