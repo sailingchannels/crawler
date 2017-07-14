@@ -515,7 +515,8 @@ def addAdditionalSubscriptions():
 
 				# add this channel
 				addSingleChannel(cc["_id"], result["items"][0], 0, False, True)
-			except:
+			except Exception, e:
+				print e
 				pass
 
 # READ CURRENT CHANNELS
@@ -530,8 +531,12 @@ def readCurrentChannels():
 		if len(result["items"]) > 0:
 			addSingleChannel(cc["_id"], result["items"][0], 0, False, True)
 
-readCurrentChannels()
-readSubscriptions(startChannelId, 1)
-addAdditionalSubscriptions()
+# only additionaly?
+if sys.argv[1] == "additional":
+	addAdditionalSubscriptions()
+else:
+	readCurrentChannels()
+	readSubscriptions(startChannelId, 1)
+	addAdditionalSubscriptions()
 
 pool.wait_completion()
