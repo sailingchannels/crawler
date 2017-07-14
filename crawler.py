@@ -502,22 +502,26 @@ def readSubscriptions(channelId, level = 1):
 # ADDITIONAL SUBSCRIPTIONS
 def addAdditionalSubscriptions():
 
+	adds = []
+
 	for cc in db.additional.find({}):
-
 		if not channels.has_key(cc["_id"]):
+			adds.append(cc["_id"])
 
-			# get info of additional channel
-			r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + cc["_id"] + "&key=" + config.apiKey())
-			result = r.json()
+	for a in adds:
 
-			try:
-				print "additional ", cc["_id"]
+		# get info of additional channel
+		r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + a + "&key=" + config.apiKey())
+		result = r.json()
 
-				# add this channel
-				addSingleChannel(cc["_id"], result["items"][0], 0, False, True)
-			except Exception, e:
-				print e
-				pass
+		try:
+			print "additional ", a
+
+			# add this channel
+			addSingleChannel(a, result["items"][0], 0, False, True)
+		except Exception, e:
+			print e
+			pass
 
 # READ CURRENT CHANNELS
 def readCurrentChannels():
