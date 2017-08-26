@@ -322,15 +322,12 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 				pass
 
 			# get popularity
-			#try:
 			popSub, popView = getChannelPopularityIndex(subChannelId, int(stats["subscriberCount"]), int(stats["viewCount"]))
 			channels[subChannelId]["popularity"] = {
 				"subscribers": popSub,
 				"views": popView,
 				"total": popSub * popSubsWeight + popView * popViewsWeight
 			}
-			#except:
-			#	pass
 
 			# read the videos
 			channelVideos = readVideos(subChannelId)
@@ -526,7 +523,7 @@ def addAdditionalSubscriptions():
 # READ CURRENT CHANNELS
 def readCurrentChannels():
 
-	for cc in db.channels.find({}, projection=["_id"]):
+	for cc in db.channels.find({"lastCrawl": {"$lt": datetime.now() - timedelta(hours=1)}}, projection=["_id"], limit=300):
 
 		# get info of additional channel
 		r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + cc["_id"] + "&key=" + config.apiKey())
