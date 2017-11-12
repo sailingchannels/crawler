@@ -516,6 +516,12 @@ def addAdditionalSubscriptions():
 
 			# add this channel
 			addSingleChannel(a, result["items"][0], 0, False, True)
+
+			# check if channel is now available
+			check_channel = db.channels.find_one({"_id": a})
+			if check_channel != None:
+				db.additional.delete_one({"_id": a})
+
 		except Exception, e:
 			print e
 			pass
