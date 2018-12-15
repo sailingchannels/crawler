@@ -90,12 +90,18 @@ def deleteChannel(channelId):
 def storeVideoStats(channelId, vid):
 
 	# fetch video statistics
-	rd = requests.get("https://www.googleapis.com/youtube/v3/videos?part=statistics,status&id=" + vid["id"] + "&key=" + config.apiKey())
+	rd = requests.get("https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,status&id=" + vid["id"] + "&key=" + config.apiKey())
 	videoStat = rd.json()
 	statistics = None
 
 	if len(videoStat["items"]) > 0:
 		statistics = videoStat["items"][0]["statistics"]
+		
+		# store video tags
+		try:
+			vid["tags"] = [x.lower() for x in videoStat["items"][0]["snippet"]["tags"]]	
+		except:
+			pass
 
 	if statistics:
 		if statistics.has_key("viewCount"):
@@ -208,7 +214,7 @@ def readVideos(channelId):
 		nextPageNew, vids = readVideosPage(channelId, nextPage)
 
 		# extend video list with new page ones
-		videos.extend(vids);
+		videos.extend(vids)
 
 		if nextPageNew == None:
 			break
@@ -259,189 +265,193 @@ def getChannelPopularityIndex(channelId, subscribers, views):
 # ADD SINGLE CHANNEL
 def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm = False):
 
-	# store this channel
-	if not channels.has_key(subChannelId):
+	try:
 
-		stats, channel_detail, branding_settings = readStatistics(subChannelId)
-		hasSailingTerm = False
+		# store this channel
+		if not channels.has_key(subChannelId):
 
-		# check if one of the sailing terms is available
-		for term in sailingTerms:
-			if (term in i["snippet"]["title"].lower() or term in i["snippet"]["description"].lower()):
-				hasSailingTerm = True
-				break
-
-		# log what happened to the channel
-		print subChannelId, hasSailingTerm, int(stats["videoCount"])
-
-		if ignoreSailingTerm == True:
-			hasSailingTerm = True
-
-		# blacklisted channel
-		if subChannelId in blacklist:
+			stats, channel_detail, branding_settings = readStatistics(subChannelId)
 			hasSailingTerm = False
-			deleteChannel(subChannelId)
 
-		if int(stats["videoCount"]) > 0 and hasSailingTerm:
+			# check if one of the sailing terms is available
+			for term in sailingTerms:
+				if (term in i["snippet"]["title"].lower() or term in i["snippet"]["description"].lower()):
+					hasSailingTerm = True
+					break
 
-			pd = datetime.strptime(channel_detail["publishedAt"], "%Y-%m-%dT%H:%M:%S.000Z")
+			# log what happened to the channel
+			print subChannelId, hasSailingTerm, int(stats["videoCount"])
 
-			channels[subChannelId] = {
-				"id": subChannelId,
-				"title": i["snippet"]["title"],
-				"description": i["snippet"]["description"],
-				"publishedAt": calendar.timegm(pd.utctimetuple()),
-				"thumbnail": i["snippet"]["thumbnails"]["default"]["url"],
-				"subscribers": int(stats["subscriberCount"]),
-				"views": int(stats["viewCount"]),
-				"subscribersHidden": bool(stats["hiddenSubscriberCount"]),
-				"lastCrawl": datetime.now()
-			}
+			if ignoreSailingTerm == True:
+				hasSailingTerm = True
 
-			# try to read custom links of channel
-			try:
-				rd = requests.get("https://sailing-channels.com/api/channel/get/" + subChannelId + "/customlinks")
+			# blacklisted channel
+			if subChannelId in blacklist:
+				hasSailingTerm = False
+				deleteChannel(subChannelId)
 
-				if rd.status_code == 200:
-					customLinks = rd.json()
-					channels[subChannelId]["customLinks"] = customLinks
-			except:
-				pass
+			if int(stats["videoCount"]) > 0 and hasSailingTerm:
 
-			# try to read position of channel
-			try:
-				cpd = requests.get("https://sailing-channels.com/api/channel/get/" + subChannelId)
-			except:
-				pass
+				pd = datetime.strptime(channel_detail["publishedAt"], "%Y-%m-%dT%H:%M:%S.000Z")
 
-			# add keywords if available
-			try:
-				if "keywords" in branding_settings["channel"]:
-					channels[subChannelId]["keywords"] = branding_settings["channel"]["keywords"].split(" ")
-			except:
-				pass
+				channels[subChannelId] = {
+					"id": subChannelId,
+					"title": i["snippet"]["title"],
+					"description": i["snippet"]["description"],
+					"publishedAt": calendar.timegm(pd.utctimetuple()),
+					"thumbnail": i["snippet"]["thumbnails"]["default"]["url"],
+					"subscribers": int(stats["subscriberCount"]),
+					"views": int(stats["viewCount"]),
+					"subscribersHidden": bool(stats["hiddenSubscriberCount"]),
+					"lastCrawl": datetime.now()
+				}
 
-			# get popularity
-			popSub, popView = getChannelPopularityIndex(subChannelId, int(stats["subscriberCount"]), int(stats["viewCount"]))
-			channels[subChannelId]["popularity"] = {
-				"subscribers": popSub,
-				"views": popView,
-				"total": popSub * popSubsWeight + popView * popViewsWeight
-			}
+				# try to read custom links of channel
+				try:
+					rd = requests.get("https://sailing-channels.com/api/channel/get/" + subChannelId + "/customlinks")
 
-			# read the videos
-			channelVideos = readVideos(subChannelId)
+					if rd.status_code == 200:
+						customLinks = rd.json()
+						channels[subChannelId]["customLinks"] = customLinks
+				except:
+					pass
 
-			# video count
-			channels[subChannelId]["videoCount"] = len(channelVideos)
+				# try to read position of channel
+				try:
+					cpd = requests.get("https://sailing-channels.com/api/channel/get/" + subChannelId)
+				except:
+					pass
 
-			lotsOfText = channels[subChannelId]["description"] + " "
+				# add keywords if available
+				try:
+					if "keywords" in branding_settings["channel"]:
+						channels[subChannelId]["keywords"] = branding_settings["channel"]["keywords"].split(" ")
+				except:
+					pass
 
-			# last upload at
-			maxVideoAge = 0
-			for vid in channelVideos:
-				lotsOfText += vid["description"] + " "
-				if vid["publishedAt"] > maxVideoAge:
-					maxVideoAge = vid["publishedAt"]
+				# get popularity
+				popSub, popView = getChannelPopularityIndex(subChannelId, int(stats["subscriberCount"]), int(stats["viewCount"]))
+				channels[subChannelId]["popularity"] = {
+					"subscribers": popSub,
+					"views": popView,
+					"total": popSub * popSubsWeight + popView * popViewsWeight
+				}
 
-			channels[subChannelId]["lastUploadAt"] = maxVideoAge
+				# read the videos
+				channelVideos = readVideos(subChannelId)
 
-			# add country info if available
-			if channel_detail.has_key("country"):
-				channels[subChannelId]["country"] = channel_detail["country"].lower()
+				# video count
+				channels[subChannelId]["videoCount"] = len(channelVideos)
 
-			hasLanguage = False
-			ch_lang = db.channels.find_one({"_id": subChannelId}, projection=["detectedLanguage"])
-			if ch_lang:
-				if ch_lang.has_key("detectedLanguage"):
-					hasLanguage = True
+				lotsOfText = channels[subChannelId]["description"] + " "
 
-			try:
+				# last upload at
+				maxVideoAge = 0
+				for vid in channelVideos:
+					lotsOfText += vid["description"] + " "
+					if vid["publishedAt"] > maxVideoAge:
+						maxVideoAge = vid["publishedAt"]
 
-				useDetectLangKey = 0
-				detectlanguage.configuration.api_key = config.detectLanguage()[useDetectLangKey]
+				channels[subChannelId]["lastUploadAt"] = maxVideoAge
 
-				# detect the language of the channel
-				if not hasLanguage and devMode == False:
+				# add country info if available
+				if channel_detail.has_key("country"):
+					channels[subChannelId]["country"] = channel_detail["country"].lower()
 
-					channels[subChannelId]["language"] = "en"
+				hasLanguage = False
+				ch_lang = db.channels.find_one({"_id": subChannelId}, projection=["detectedLanguage"])
+				if ch_lang:
+					if ch_lang.has_key("detectedLanguage"):
+						hasLanguage = True
 
-					runLoop = True
-					while runLoop:
-						try:
-							detectedLang = detectlanguage.detect(lotsOfText)
-							runLoop = False
-						except:
-							useDetectLangKey = useDetectLangKey + 1
+				try:
 
-							if useDetectLangKey > len(config.detectLanguage()):
-								 runLoop = False
-							else:
-								detectlanguage.configuration.api_key = config.detectLanguage()[useDetectLangKey]
+					useDetectLangKey = 0
+					detectlanguage.configuration.api_key = config.detectLanguage()[useDetectLangKey]
 
-					# did we find a language in the text body?
-					if len(detectedLang) > 0:
+					# detect the language of the channel
+					if not hasLanguage and devMode == False:
 
-						# is the detection reliable?
-						if detectedLang[0]["isReliable"]:
-							channels[subChannelId]["language"] = detectedLang[0]["language"]
-							channels[subChannelId]["detectedLanguage"] = True
-			except:
-				pass
+						channels[subChannelId]["language"] = "en"
 
-			# insert subscriber counts
-			try:
-				db.subscribers.update_one({
-					"_id": {
-						"channel": subChannelId,
-						"date": int(date.today().strftime("%Y%m%d"))
-					}
-				}, {
-					"$set": {
-						"year": date.today().year,
-						"month": date.today().month,
-						"day": date.today().day,
-						"date": datetime.utcnow(),
-						"subscribers": channels[subChannelId]["subscribers"]
-					}
-				}, True)
-			except:
-				pass
+						runLoop = True
+						while runLoop:
+							try:
+								detectedLang = detectlanguage.detect(lotsOfText)
+								runLoop = False
+							except:
+								useDetectLangKey = useDetectLangKey + 1
 
-			# insert view counts
-			try:
-				db.views.update_one({
-					"_id": {
-						"channel": subChannelId,
-						"date": int(date.today().strftime("%Y%m%d"))
-					}
-				}, {
-					"$set": {
-						"year": date.today().year,
-						"month": date.today().month,
-						"day": date.today().day,
-						"date": datetime.utcnow(),
-						"views": channels[subChannelId]["views"]
-					}
-				}, True)
-			except:
-				pass
+								if useDetectLangKey > len(config.detectLanguage()):
+									runLoop = False
+								else:
+									detectlanguage.configuration.api_key = config.detectLanguage()[useDetectLangKey]
 
-			# upsert data in mongodb
-			try:
+						# did we find a language in the text body?
+						if len(detectedLang) > 0:
 
-				db.channels.update_one({
-					"_id": subChannelId
-				}, {
-					"$set": channels[subChannelId]
-				}, True)
-			except:
-				pass
+							# is the detection reliable?
+							if detectedLang[0]["isReliable"]:
+								channels[subChannelId]["language"] = detectedLang[0]["language"]
+								channels[subChannelId]["detectedLanguage"] = True
+				except:
+					pass
 
-			# read sub level subscriptions
-			subLevel = level + 1
-			if readSubs == True:
-				readSubscriptions(subChannelId, subLevel)
+				# insert subscriber counts
+				try:
+					db.subscribers.update_one({
+						"_id": {
+							"channel": subChannelId,
+							"date": int(date.today().strftime("%Y%m%d"))
+						}
+					}, {
+						"$set": {
+							"year": date.today().year,
+							"month": date.today().month,
+							"day": date.today().day,
+							"date": datetime.utcnow(),
+							"subscribers": channels[subChannelId]["subscribers"]
+						}
+					}, True)
+				except:
+					pass
+
+				# insert view counts
+				try:
+					db.views.update_one({
+						"_id": {
+							"channel": subChannelId,
+							"date": int(date.today().strftime("%Y%m%d"))
+						}
+					}, {
+						"$set": {
+							"year": date.today().year,
+							"month": date.today().month,
+							"day": date.today().day,
+							"date": datetime.utcnow(),
+							"views": channels[subChannelId]["views"]
+						}
+					}, True)
+				except:
+					pass
+
+				# upsert data in mongodb
+				try:
+
+					db.channels.update_one({
+						"_id": subChannelId
+					}, {
+						"$set": channels[subChannelId]
+					}, True)
+				except:
+					pass
+
+				# read sub level subscriptions
+				subLevel = level + 1
+				if readSubs == True:
+					readSubscriptions(subChannelId, subLevel)
+	except:
+		pass
 
 # READ SUBSCRIPTIONS PAGE
 def readSubscriptionsPage(channelId, pageToken = None, level = 1):
