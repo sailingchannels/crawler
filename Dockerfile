@@ -1,6 +1,6 @@
 FROM ubuntu:16.04
 MAINTAINER Thomas Brüggemann <mail@thomasbrueggemann.com>
-LABEL Description="sailing-channels.com Crawler" Vendor="Sailing Channels" Version="1.14.0"
+LABEL Description="sailing-channels.com Crawler" Vendor="Sailing Channels" Version="1.14.1"
 
 # INSTALL DEPENDENCIES
 RUN apt-get update -y && apt-get install -y python-pip python-setuptools openssl python-dev libssl-dev cron
@@ -12,4 +12,4 @@ WORKDIR /srv
 RUN pip install -r requirements.txt
 
 # run the command on container startup
-CMD python /srv/crawler.py
+CMD python /srv/crawler.py /srv/
