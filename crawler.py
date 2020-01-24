@@ -138,7 +138,7 @@ def storeVideoStats(channelId, vid):
 
 				# twitter
 				try:
-					msg = "New: " + ch["title"] + " \"" + dbVid["title"] + "\" https://sailing-channels.com/video/" + dbVid["_id"]
+					msg = "New: " + ch["title"] + " \"" + dbVid["title"] + "\" https://sailing-channels.com/#/channel/" + channelId
 					if devMode <> True:
 						twitter.update_status(status=msg)
 					else:

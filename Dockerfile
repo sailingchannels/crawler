@@ -1,6 +1,6 @@
 FROM ubuntu:16.04
 MAINTAINER Thomas Brüggemann <mail@thomasbrueggemann.com>
-LABEL Description="sailing-channels.com Crawler" Vendor="Sailing Channels" Version="1.14.1"
+LABEL Description="sailing-channels.com Crawler" Vendor="Sailing Channels" Version="1.14.2"
 
 # INSTALL DEPENDENCIES
 RUN apt-get update -y && apt-get install -y python-pip python-setuptools openssl python-dev libssl-dev cron
