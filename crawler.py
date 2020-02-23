@@ -541,12 +541,15 @@ def readCurrentChannels():
 
 	for cc in db.channels.find({"lastCrawl": {"$lt": datetime.now() - timedelta(hours=1)}}, projection=["_id"], limit=300):
 
-		# get info of additional channel
-		r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + cc["_id"] + "&key=" + config.apiKey())
-		result = r.json()
+		try:
+			# get info of additional channel
+			r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + cc["_id"] + "&key=" + config.apiKey())
+			result = r.json()
 
-		if len(result["items"]) > 0:
-			addSingleChannel(cc["_id"], result["items"][0], 0, False, True)
+			if len(result["items"]) > 0:
+				addSingleChannel(cc["_id"], result["items"][0], 0, False, True)
+		except Exception, e:
+            print e
 
 # only additionaly?
 if sys.argv[1] == "additional":
