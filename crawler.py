@@ -1,12 +1,21 @@
-import requests, json, config, calendar, sys, time, math
+import requests, json, config, calendar, sys, time, math, logging
 from pymongo import MongoClient
 from datetime import datetime, date, timedelta
 import detectlanguage
 from Queue import Queue
 from twython import Twython
 from apikeyprovider import APIKeyProvider
+from colorformatter import ColorFormatter
 
 apiKeyProvider = APIKeyProvider()
+
+# logging
+logger = logging.getLogger("sailing-channels-crawler")
+logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(ColorFormatter())
+logger.addHandler(ch)
 
 # social networks
 twitter = Twython(config.twitter()["consumerKey"], config.twitter()["consumerSecret"], config.twitter()["accessToken"], config.twitter()["accessSecret"])
@@ -28,7 +37,7 @@ devMode = False
 if len(sys.argv) != 2:
 	db_name += "-dev"
 	devMode = True
-	print "*** DEVELOPER MODE ***"
+	logger.info("*** DEVELOPER MODE ***")
 
 db = client[db_name]
 
@@ -40,7 +49,7 @@ for tt in db.sailingterms.find({}):
 for bb in db.blacklist.find({}):
 	blacklist.append(bb["_id"])
 
-print sailingTerms
+logger.info(sailingTerms)
 
 # members
 channels = {}
@@ -57,9 +66,14 @@ def deleteChannel(channelId):
 def storeVideoStats(channelId, vid):
 
 	# fetch video statistics
-	rd = requests.get("https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,status&id=" + vid["id"] + "&key=" + apiKeyProvider.apiKey())
+	key = apiKeyProvider.apiKey()
+	rd = requests.get("https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,status&id=" + vid["id"] + "&key=" + key)
 	videoStat = rd.json()
 	statistics = None
+
+	if videoStat is None or "items" not in videoStat:
+		logger.warning("could not retrieve statistic for channel %s, apikey %s, statuscode %d, content: %s", channelId, key, rd.status_code, rd.content)
+		return
 
 	if len(videoStat["items"]) > 0:
 		statistics = videoStat["items"][0]["statistics"]
@@ -109,10 +123,10 @@ def storeVideoStats(channelId, vid):
 					if devMode <> True:
 						twitter.update_status(status=msg)
 					else:
-						print msg
+						logger.warning(msg)
 
 				except Exception, e:
-					print e
+					logger.exception(e)
 
 			# update information in database
 			db.videos.update_one({
@@ -149,7 +163,7 @@ def readVideosPage(channelId, pageToken = None):
 		if v["id"]["kind"] != "youtube#video":
 			continue
 
-		d = datetime.strptime(v["snippet"]["publishedAt"], "%Y-%m-%dT%H:%M:%S.000Z")
+		d = datetime.strptime(v["snippet"]["publishedAt"], "%Y-%m-%dT%H:%M:%SZ")
 
 		vid = {
 			"id": v["id"]["videoId"],
@@ -193,6 +207,10 @@ def readStatistics(channelId):
 
 	r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,brandingSettings&id=" + channelId + "&key=" + apiKeyProvider.apiKey())
 	stats = r.json()
+
+	if stats is None or "items" not in stats:
+		return None, None, None
+
 	return stats["items"][0]["statistics"], stats["items"][0]["snippet"], stats["items"][0]["brandingSettings"]
 
 # GET CHANNEL POPULARITY INDEX
@@ -238,11 +256,15 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 			last_crawled = db.channels.find_one({"_id": subChannelId}, projection=["lastCrawl"])
 			if last_crawled:
 				if (datetime.now() - last_crawled["lastCrawl"]).total_seconds() < THREE_HOURS_IN_SECONDS:
-					print "skip", subChannelId, ", last crawl less than", THREE_HOURS_IN_SECONDS, "secs ago"
+					logger.info("skip %s lass crawl less than %d secs ago", subChannelId, THREE_HOURS_IN_SECONDS)
 					return
 
 			stats, channel_detail, branding_settings = readStatistics(subChannelId)
 			hasSailingTerm = False
+
+			if stats is None:
+				logger.warning("could not read stats for channel %s", subChannelId)
+				return
 
 			# check if one of the sailing terms is available
 			for term in sailingTerms:
@@ -251,7 +273,7 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 					break
 
 			# log what happened to the channel
-			print subChannelId, hasSailingTerm, int(stats["videoCount"])
+			logger.info("%s %s %d", subChannelId, hasSailingTerm, int(stats["videoCount"]))
 
 			if ignoreSailingTerm == True:
 				hasSailingTerm = True
@@ -263,7 +285,7 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 
 			if int(stats["videoCount"]) > 0 and hasSailingTerm:
 
-				pd = datetime.strptime(channel_detail["publishedAt"], "%Y-%m-%dT%H:%M:%S.000Z")
+				pd = datetime.strptime(channel_detail["publishedAt"], "%Y-%m-%dT%H:%M:%SZ")
 
 				channels[subChannelId] = {
 					"id": subChannelId,
@@ -278,27 +300,21 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 				}
 
 				# try to read custom links of channel
-				try:
-					rd = requests.get("https://sailing-channels.com/api/channel/get/" + subChannelId + "/customlinks")
+				# try:
+				# 	rd = requests.get("https://sailing-channels.com/api/channel/get/" + subChannelId + "/customlinks")
 
-					if rd.status_code == 200:
-						customLinks = rd.json()
-						channels[subChannelId]["customLinks"] = customLinks
-				except:
-					pass
-
-				# try to read position of channel
-				try:
-					cpd = requests.get("https://sailing-channels.com/api/channel/get/" + subChannelId)
-				except:
-					pass
+				# 	if rd.status_code == 200:
+				# 		customLinks = rd.json()
+				# 		channels[subChannelId]["customLinks"] = customLinks
+				# except Exception, e:
+				# 	logger.exception(e)
 
 				# add keywords if available
 				try:
-					if "keywords" in branding_settings["channel"]:
+					if branding_settings is not None and "channel" in branding_settings and "keywords" in branding_settings["channel"]:
 						channels[subChannelId]["keywords"] = branding_settings["channel"]["keywords"].split(" ")
-				except:
-					pass
+				except Exception, e:
+					logger.exception(e)
 
 				# get popularity
 				popSub, popView = getChannelPopularityIndex(subChannelId, int(stats["subscriberCount"]), int(stats["viewCount"]))
@@ -365,8 +381,8 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 							if detectedLang[0]["isReliable"]:
 								channels[subChannelId]["language"] = detectedLang[0]["language"]
 								channels[subChannelId]["detectedLanguage"] = True
-				except:
-					pass
+				except Exception, e:
+					logger.exception(e)
 
 				# insert subscriber counts
 				try:
@@ -384,8 +400,8 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 							"subscribers": channels[subChannelId]["subscribers"]
 						}
 					}, True)
-				except:
-					pass
+				except Exception, e:
+					logger.exception(e)
 
 				# insert view counts
 				try:
@@ -403,8 +419,8 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 							"views": channels[subChannelId]["views"]
 						}
 					}, True)
-				except:
-					pass
+				except Exception, e:
+					logger.exception(e)
 
 				# upsert data in mongodb
 				try:
@@ -414,15 +430,17 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 					}, {
 						"$set": channels[subChannelId]
 					}, True)
-				except:
-					pass
+
+					logger.info("updated %s", subChannelId)
+				except Exception, e:
+					logger.exception(e)
 
 				# read sub level subscriptions
 				subLevel = level + 1
 				if readSubs == True:
 					readSubscriptions(subChannelId, subLevel)
-	except:
-		pass
+	except Exception, e:
+		logger.exception(e)
 
 # READ SUBSCRIPTIONS PAGE
 def readSubscriptionsPage(channelId, pageToken = None, level = 1):
@@ -438,7 +456,7 @@ def readSubscriptionsPage(channelId, pageToken = None, level = 1):
 
 	# error? ignore!
 	if r.status_code != 200:
-		print "error", r.status_code, channelId, level
+		logger.warning("error %d %s %d", r.status_code, channelId, level)
 		return None
 
 	# loop channel items in result set
@@ -492,7 +510,7 @@ def addAdditionalSubscriptions():
 		result = r.json()
 
 		try:
-			print "additional ", a
+			logger.info("additional %s", a)
 
 			# add this channel
 			addSingleChannel(a, result["items"][0], 0, False, True)
@@ -503,28 +521,27 @@ def addAdditionalSubscriptions():
 				db.additional.delete_one({"_id": a})
 
 		except Exception, e:
-			print e
-			pass
+			logger.exception(e)
 
 # READ CURRENT CHANNELS
 def readCurrentChannels():
 
-	for cc in db.channels.find({"lastCrawl": {"$lt": datetime.now() - timedelta(hours=1)}}, projection=["_id"], limit=50):
+	for cc in db.channels.find({"lastCrawl": {"$lt": datetime.now() - timedelta(hours=1)}}, projection=["_id"], limit=10):
 
 		try:
 			# get info of additional channel
 			r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + cc["_id"] + "&key=" + apiKeyProvider.apiKey())
 			result = r.json()
 
-			if len(result["items"]) > 0:
+			if result is not None and "items" in result and len(result["items"]) > 0:
 				addSingleChannel(cc["_id"], result["items"][0], 0, False, True)
 		except Exception, e:
-			print e
+			logger.exception(e)
 
 # only additionaly?
 if sys.argv[1] == "additional":
 	addAdditionalSubscriptions()
 else:
-	readCurrentChannels()
+	#readCurrentChannels()
 	readSubscriptions(startChannelId, 1)
 	addAdditionalSubscriptions()
