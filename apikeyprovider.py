@@ -1,18 +1,18 @@
 import config
 
+
 class APIKeyProvider:
-	i = 0
-	
-	def __init__(self):
-		self.keys = config.apiKey()
+    i = 0
 
-	def apiKey(self):
-		key = self.keys[self.i]
+    def __init__(self):
+        self.keys = config.apiKey()
 
-		self.i += 1
-		
-		if self.i > len(self.keys) - 1:
-			self.i = 0
+    def apiKey(self):
+        key = self.keys[self.i]
 
-		return key
+        self.i += 1
 
+        if self.i > len(self.keys) - 1:
+            self.i = 0
+
+        return key
