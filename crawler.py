@@ -5,7 +5,9 @@ import calendar
 import sys
 import time
 import math
+import xmltodict
 import logging
+import arrow
 from pymongo import MongoClient
 from datetime import datetime, date, timedelta
 import detectlanguage
@@ -76,7 +78,7 @@ def deleteChannel(channelId):
 # STORE VIDEO STATS
 
 
-def storeVideoStats(channelId, vid):
+def storeVideoWithStats(channelId, vid):
 
     # fetch video statistics
     key = apiKeyProvider.apiKey()
@@ -162,69 +164,6 @@ def storeVideoStats(channelId, vid):
             "_id": dbVid["id"]
         })
 
-# READ VIDEOS PAGE
-
-
-def readVideosPage(channelId, pageToken=None):
-
-    url = "https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=" + \
-        channelId + "&maxResults=50&regionCode=us&key=" + apiKeyProvider.apiKey()
-
-    if pageToken != None:
-        url += "&pageToken=" + pageToken
-
-    # fetch videos of channel
-    r = requests.get(url)
-    vids = r.json()
-
-    videos = []
-    for v in vids["items"]:
-
-        # ignore playlists
-        if v["id"]["kind"] != "youtube#video":
-            continue
-
-        d = datetime.strptime(
-            v["snippet"]["publishedAt"], "%Y-%m-%dT%H:%M:%SZ")
-
-        vid = {
-            "id": v["id"]["videoId"],
-            "title": v["snippet"]["title"],
-            "description": v["snippet"]["description"],
-            "publishedAt": calendar.timegm(d.utctimetuple())
-        }
-
-        videos.append(vid)
-
-        storeVideoStats(channelId, vid)
-
-    # is there a next page?
-    if vids.has_key("nextPageToken"):
-        return vids["nextPageToken"], videos
-    else:
-        return None, videos
-
-# READ VIDEOS
-
-
-def readVideos(channelId):
-
-    nextPage = None
-    nextPageNew = None
-    videos = []
-
-    while True:
-        nextPageNew, vids = readVideosPage(channelId, nextPage)
-
-        # extend video list with new page ones
-        videos.extend(vids)
-
-        if nextPageNew == None:
-            break
-
-        nextPage = nextPageNew
-
-    return videos
 
 # READ STATISTICS
 
@@ -363,22 +302,7 @@ def addSingleChannel(subChannelId, i, level, readSubs=True, ignoreSailingTerm=Fa
                     "total": popSub * popSubsWeight + popView * popViewsWeight
                 }
 
-                # read the videos
-                channelVideos = readVideos(subChannelId)
-
-                # video count
-                channels[subChannelId]["videoCount"] = len(channelVideos)
-
                 lotsOfText = channels[subChannelId]["description"] + " "
-
-                # last upload at
-                maxVideoAge = 0
-                for vid in channelVideos:
-                    lotsOfText += vid["description"] + " "
-                    if vid["publishedAt"] > maxVideoAge:
-                        maxVideoAge = vid["publishedAt"]
-
-                channels[subChannelId]["lastUploadAt"] = maxVideoAge
 
                 # add country info if available
                 if channel_detail.has_key("country"):
@@ -593,6 +517,67 @@ def readCurrentChannels():
             logger.exception(e)
 
 
+def checkAllChannelsForNewVideos():
+
+    for channel in db.channels.find({}, projection=["_id"]):
+        try:
+            videoIds = getVideoIdsFromRSSFeed(channel["_id"])
+
+        except Exception, e:
+            logger.exception(e)
+
+
+def getVideoIdsFromRSSFeed(channelId):
+    baseUrl = "https://www.youtube.com"
+    url = baseUrl + "/feeds/videos.xml?channel_id=" + channelId
+
+    r = requests.get(url)
+
+    if r.status_code != 200:
+        logger.warning("request to %s failed with status code %d, body: %s",
+                       url, r.status_code, r.content)
+
+    videoFeed = xmltodict.parse(r.content)
+
+    if videoFeed is None or "feed" not in videoFeed:
+        logger.warning("xml for url %s does not contain valid feed", url)
+
+    for feedItem in videoFeed["feed"]["entry"]:
+        storedVideo = db.videos.find_one(
+            {"_id": feedItem["yt:videoId"]}, projection=["_id", "updatedAt"])
+
+        if storedVideo is None:
+            insertVideo(feedItem)
+        else:
+            updateVideo(feedItem)
+
+
+def insertVideo(feedItem):
+    publishedAt = arrow.get(feedItem["published"]).timestamp
+    updatedAt = arrow.get(feedItem["updated"]).timestamp
+
+    vid = {
+        "_id": feedItem["yt:videoId"],
+        "title": feedItem["title"],
+        "description": feedItem["media:group"]["media:description"],
+        "publishedAt": publishedAt,
+        "updatedAt": updatedAt,
+        "views": int(feedItem["media:group"]["media:community"]["media:statistics"]["@views"]),
+        "channel": feedItem["yt:channelId"],
+        "geoChecked": False,
+        "tags": []
+    }
+
+    storeVideoWithStats(vid["channel"], vid)
+
+    # update videoCount and lastUploadAt on channel document
+
+
+def updateVideo(feedItem):
+    print "update", feedItem["yt:videoId"]
+
+
 # readCurrentChannels()
-readSubscriptions(startChannelId, 1)
-addAdditionalSubscriptions()
+# readSubscriptions(startChannelId, 1)
+# addAdditionalSubscriptions()
+getVideoIdsFromRSSFeed("UCLKPfqBGqL4gaEvegb_If0Q")
