@@ -3,45 +3,13 @@ from pymongo import MongoClient
 from datetime import datetime, date, timedelta
 import detectlanguage
 from Queue import Queue
-from threading import Thread
 from twython import Twython
+from apikeyprovider import APIKeyProvider
+
+apiKeyProvider = APIKeyProvider()
 
 # social networks
 twitter = Twython(config.twitter()["consumerKey"], config.twitter()["consumerSecret"], config.twitter()["accessToken"], config.twitter()["accessSecret"])
-
-# WORKER
-class Worker(Thread):
-    """Thread executing tasks from a given tasks queue"""
-    def __init__(self, tasks):
-        Thread.__init__(self)
-        self.tasks = tasks
-        self.daemon = True
-        self.start()
-
-    def run(self):
-        while True:
-            func, args, kargs = self.tasks.get()
-            try:
-                func(*args, **kargs)
-            except Exception, e:
-                print e
-            finally:
-                self.tasks.task_done()
-
-# THREAD POOL
-class ThreadPool:
-    """Pool of threads consuming tasks from a queue"""
-    def __init__(self, num_threads):
-        self.tasks = Queue(num_threads)
-        for _ in range(num_threads): Worker(self.tasks)
-
-    def add_task(self, func, *args, **kargs):
-        """Add a task to the queue"""
-        self.tasks.put((func, args, kargs))
-
-    def wait_completion(self):
-        """Wait for completion of all the tasks in the queue"""
-        self.tasks.join()
 
 # config
 startChannelId = "UC5xDht2blPNWdVtl9PkDmgA" # SailLife
@@ -50,13 +18,12 @@ popSubsWeight = 0.5
 popViewsWeight = 0.5
 sailingTerms = []
 blacklist = []
+THREE_HOURS_IN_SECONDS = 10800
 
 # open mongodb connection
 client = MongoClient(config.mongoDB())
 db_name = "sailing-channels"
 devMode = False
-
-pool = ThreadPool(4)
 
 if len(sys.argv) != 2:
 	db_name += "-dev"
@@ -90,7 +57,7 @@ def deleteChannel(channelId):
 def storeVideoStats(channelId, vid):
 
 	# fetch video statistics
-	rd = requests.get("https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,status&id=" + vid["id"] + "&key=" + config.apiKey())
+	rd = requests.get("https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,status&id=" + vid["id"] + "&key=" + apiKeyProvider.apiKey())
 	videoStat = rd.json()
 	statistics = None
 
@@ -166,7 +133,7 @@ def storeVideoStats(channelId, vid):
 # READ VIDEOS PAGE
 def readVideosPage(channelId, pageToken = None):
 
-	url = "https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=" + channelId + "&maxResults=50&regionCode=us&key=" + config.apiKey()
+	url = "https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=" + channelId + "&maxResults=50&regionCode=us&key=" + apiKeyProvider.apiKey()
 
 	if pageToken != None:
 		url += "&pageToken=" + pageToken
@@ -193,9 +160,7 @@ def readVideosPage(channelId, pageToken = None):
 
 		videos.append(vid)
 
-		# start new thread to extract video statistics
-		#start_new_thread(storeVideoStats, (channelId, vid,))
-		pool.add_task(storeVideoStats, channelId, vid)
+		storeVideoStats(channelId, vid)
 
 	# is there a next page?
 	if vids.has_key("nextPageToken"):
@@ -226,7 +191,7 @@ def readVideos(channelId):
 # READ STATISTICS
 def readStatistics(channelId):
 
-	r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,brandingSettings&id=" + channelId + "&key=" + config.apiKey())
+	r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,brandingSettings&id=" + channelId + "&key=" + apiKeyProvider.apiKey())
 	stats = r.json()
 	return stats["items"][0]["statistics"], stats["items"][0]["snippet"], stats["items"][0]["brandingSettings"]
 
@@ -269,6 +234,12 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 
 		# store this channel
 		if not channels.has_key(subChannelId):
+
+			last_crawled = db.channels.find_one({"_id": subChannelId}, projection=["lastCrawl"])
+			if last_crawled:
+				if (datetime.now() - last_crawled["lastCrawl"]).total_seconds() < THREE_HOURS_IN_SECONDS:
+					print "skip", subChannelId, ", last crawl less than", THREE_HOURS_IN_SECONDS, "secs ago"
+					return
 
 			stats, channel_detail, branding_settings = readStatistics(subChannelId)
 			hasSailingTerm = False
@@ -456,7 +427,7 @@ def addSingleChannel(subChannelId, i, level, readSubs = True, ignoreSailingTerm 
 # READ SUBSCRIPTIONS PAGE
 def readSubscriptionsPage(channelId, pageToken = None, level = 1):
 
-	url = "https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&maxResults=50&channelId=" + channelId + "&key=" + config.apiKey()
+	url = "https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&maxResults=50&channelId=" + channelId + "&key=" + apiKeyProvider.apiKey()
 
 	if pageToken != None:
 		url += "&pageToken=" + pageToken
@@ -474,7 +445,6 @@ def readSubscriptionsPage(channelId, pageToken = None, level = 1):
 	for i in subs["items"]:
 
 		if i["snippet"]["resourceId"]["kind"] != "youtube#channel":
-			#print i["snippet"]["resourceId"]["kind"]
 			continue
 
 		subChannelId = i["snippet"]["resourceId"]["channelId"]
@@ -518,7 +488,7 @@ def addAdditionalSubscriptions():
 	for a in adds:
 
 		# get info of additional channel
-		r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + a + "&key=" + config.apiKey())
+		r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + a + "&key=" + apiKeyProvider.apiKey())
 		result = r.json()
 
 		try:
@@ -539,17 +509,17 @@ def addAdditionalSubscriptions():
 # READ CURRENT CHANNELS
 def readCurrentChannels():
 
-	for cc in db.channels.find({"lastCrawl": {"$lt": datetime.now() - timedelta(hours=1)}}, projection=["_id"], limit=300):
+	for cc in db.channels.find({"lastCrawl": {"$lt": datetime.now() - timedelta(hours=1)}}, projection=["_id"], limit=50):
 
 		try:
 			# get info of additional channel
-			r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + cc["_id"] + "&key=" + config.apiKey())
+			r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + cc["_id"] + "&key=" + apiKeyProvider.apiKey())
 			result = r.json()
 
 			if len(result["items"]) > 0:
 				addSingleChannel(cc["_id"], result["items"][0], 0, False, True)
 		except Exception, e:
-            print e
+			print e
 
 # only additionaly?
 if sys.argv[1] == "additional":
@@ -558,5 +528,3 @@ else:
 	readCurrentChannels()
 	readSubscriptions(startChannelId, 1)
 	addAdditionalSubscriptions()
-
-pool.wait_completion()
