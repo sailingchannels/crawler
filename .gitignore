@@ -63,3 +63,5 @@ target/
 
 *.sublime-*
 config.py
+
+.vscode

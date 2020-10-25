@@ -1,6 +1,6 @@
 FROM ubuntu:16.04
 MAINTAINER Thomas Brüggemann <mail@thomasbrueggemann.com>
-LABEL Description="sailing-channels.com Crawler" Vendor="Sailing Channels" Version="1.14.3"
+LABEL Description="sailing-channels.com Crawler" Vendor="Sailing Channels" Version="1.13.12"
 
 # INSTALL DEPENDENCIES
 RUN apt-get update -y && apt-get install -y python-pip python-setuptools openssl python-dev libssl-dev cron
@@ -11,5 +11,14 @@ WORKDIR /srv
 
 RUN pip install -r requirements.txt
 
+# add crontab file in the cron directory
+ADD crontab /etc/cron.d/sailingchannels
+
+# give execution rights on the cron job
+RUN chmod 0644 /etc/cron.d/sailingchannels
+
+# create the log file to be able to run tail
+RUN touch /var/log/cron.log
+
 # run the command on container startup
-CMD python /srv/crawler.py /srv/
+CMD cron && tail -f /var/log/cron.log

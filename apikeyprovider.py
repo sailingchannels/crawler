@@ -4,8 +4,8 @@ import config
 class APIKeyProvider:
     i = 0
 
-    def __init__(self):
-        self.keys = config.apiKey()
+    def __init__(self, keys):
+        self.keys = keys
 
     def apiKey(self):
         key = self.keys[self.i]

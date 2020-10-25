@@ -16,7 +16,8 @@ from twython import Twython
 from apikeyprovider import APIKeyProvider
 from colorformatter import ColorFormatter
 
-apiKeyProvider = APIKeyProvider()
+apiKeyProvider = APIKeyProvider(config.apiKey())
+videoKeyProvider = APIKeyProvider(config.apiVideoKeys())
 
 # logging
 logger = logging.getLogger("sailing-channels-crawler")
@@ -80,89 +81,109 @@ def deleteChannel(channelId):
 
 def storeVideoWithStats(channelId, vid):
 
-    # fetch video statistics
-    key = apiKeyProvider.apiKey()
-    rd = requests.get(
-        "https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,status&id=" + vid["id"] + "&key=" + key)
-    videoStat = rd.json()
-    statistics = None
+    existingVideo = db.videos.find_one({"_id": vid["id"]}, projection=[
+                                       "_id", "updatedAt"])
 
-    if videoStat is None or "items" not in videoStat:
-        logger.warning("could not retrieve statistic for channel %s, apikey %s, statuscode %d, content: %s",
-                       channelId, key, rd.status_code, rd.content)
-        return
+    shouldUpdateVideo = True
 
-    if len(videoStat["items"]) > 0:
-        statistics = videoStat["items"][0]["statistics"]
+    if existingVideo is not None and "updatedAt" in existingVideo:
+        shouldUpdateVideo = math.fabs(int(
+            existingVideo["updatedAt"]) - arrow.utcnow().timestamp) >= THREE_HOURS_IN_SECONDS
 
-        # store video tags
-        try:
-            vid["tags"] = [x.lower()
-                           for x in videoStat["items"][0]["snippet"]["tags"]]
-        except:
-            pass
+        logger.info("should NOT update video %s based on updatedAt %d in diff to utc %d",
+                    vid["id"], int(existingVideo["updatedAt"]), arrow.utcnow().timestamp)
 
-    if statistics:
-        if statistics.has_key("viewCount"):
-            vid["views"] = int(statistics["viewCount"])
+    if shouldUpdateVideo:
 
-        if statistics.has_key("likeCount"):
-            vid["likes"] = int(statistics["likeCount"])
+        # fetch video statistics
+        key = videoKeyProvider.apiKey()
+        rd = requests.get(
+            "https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,status&id=" + vid["id"] + "&key=" + key)
+        videoStat = rd.json()
+        statistics = None
 
-        if statistics.has_key("dislikeCount"):
-            vid["dislikes"] = int(statistics["dislikeCount"])
+        if videoStat is None or "items" not in videoStat:
+            logger.warning("could not retrieve statistic for channel %s, apikey %s, statuscode %d, content: %s",
+                           channelId, key, rd.status_code, rd.content)
+            return
 
-        if statistics.has_key("commentCount"):
-            vid["comments"] = int(statistics["commentCount"])
+        if len(videoStat["items"]) > 0:
+            statistics = videoStat["items"][0]["statistics"]
 
-    # status of video
-    status = videoStat["items"][0]["status"]
+            # store video tags
+            try:
+                vid["tags"] = [x.lower()
+                               for x in videoStat["items"][0]["snippet"]["tags"]]
+            except:
+                pass
 
-    if status["privacyStatus"] == "public":
+        if statistics:
+            if statistics.has_key("viewCount"):
+                vid["views"] = int(statistics["viewCount"])
 
-        # prepare video for inserting into database
-        dbVid = vid
-        dbVid["_id"] = dbVid["id"]
-        dbVid["channel"] = channelId
-        del dbVid["id"]
+            if statistics.has_key("likeCount"):
+                vid["likes"] = int(statistics["likeCount"])
 
-        try:
-            # check if this video exists in database
-            vid_exists = db.videos.count({"_id": dbVid["_id"]})
+            if statistics.has_key("dislikeCount"):
+                vid["dislikes"] = int(statistics["dislikeCount"])
 
-            # reasonable fresh video, post to twitter and facebook
-            if vid_exists == 0 and math.fabs(int(dbVid["publishedAt"]) - time.mktime(datetime.utcnow().timetuple())) <= 15000:
+            if statistics.has_key("commentCount"):
+                vid["comments"] = int(statistics["commentCount"])
 
-                ch = db.channels.find_one(
-                    {"_id": channelId}, projection=["title"])
+        # status of video
+        status = videoStat["items"][0]["status"]
 
-                # twitter
-                try:
-                    msg = "New: " + ch["title"] + " \"" + dbVid["title"] + \
-                        "\" https://sailing-channels.com/#/channel/" + channelId
-                    if devMode <> True:
-                        twitter.update_status(status=msg)
-                    else:
-                        logger.warning(msg)
+        if status["privacyStatus"] == "public":
 
-                except Exception, e:
-                    logger.exception(e)
+            # prepare video for inserting into database
+            dbVid = vid
+            dbVid["_id"] = dbVid["id"]
+            dbVid["channel"] = channelId
+            dbVid["updatedAt"] = arrow.utcnow().timestamp
+            del dbVid["id"]
 
-            # update information in database
-            db.videos.update_one({
-                "_id": dbVid["_id"]
-            }, {
-                "$set": dbVid
-            }, True)
+            try:
+                vidDoesNotExists = existingVideo is None
 
-        except:
-            pass
-    else:
+                # reasonable fresh video, post to twitter and facebook
+                if vidDoesNotExists and math.fabs(int(dbVid["publishedAt"]) - time.mktime(datetime.utcnow().timetuple())) <= 15000:
 
-        # remove non public videos
-        db.videos.delete_one({
-            "_id": dbVid["id"]
-        })
+                    ch = db.channels.find_one(
+                        {"_id": channelId}, projection=["title"])
+
+                    # twitter
+                    try:
+                        msg = "New: " + ch["title"] + " \"" + dbVid["title"] + \
+                            "\" https://sailing-channels.com/#/channel/" + channelId
+                        if devMode <> True:
+                            twitter.update_status(status=msg)
+                        else:
+                            logger.warning(msg)
+
+                    except Exception, e:
+                        logger.exception(e)
+
+                # update information in database
+                db.videos.update_one({
+                    "_id": dbVid["_id"]
+                }, {
+                    "$set": dbVid
+                }, True)
+
+                logger.info("upserted video %s for channel %s",
+                            dbVid["_id"], channelId)
+
+            except:
+                pass
+        else:
+
+            # remove non public videos
+            db.videos.delete_one({
+                "_id": dbVid["id"]
+            })
+
+            logger.info("deleted video %s for channel %s",
+                        dbVid["_id"], channelId)
 
 
 # READ STATISTICS
@@ -521,17 +542,32 @@ def checkAllChannelsForNewVideos():
 
     for channel in db.channels.find({}, projection=["_id"]):
         try:
-            videoIds = getVideoIdsFromRSSFeed(channel["_id"])
+            logger.info("Store videos via RSS feed for channel %s",
+                        channel["_id"])
+
+            maxPublishedAt = storeVideosFromRSSFeed(channel["_id"])
+
+            # update videoCount and lastUploadAt on channel document
+            db.channels.update_one({
+                "_id": channel["_id"]
+            }, {
+                "$set": {
+                    "videoCount": db.videos.count({"channel": channel["_id"]}),
+                    "lastUploadAt": maxPublishedAt
+                }
+            })
 
         except Exception, e:
             logger.exception(e)
 
 
-def getVideoIdsFromRSSFeed(channelId):
-    baseUrl = "https://www.youtube.com"
-    url = baseUrl + "/feeds/videos.xml?channel_id=" + channelId
+def storeVideosFromRSSFeed(channelId):
+    headers = {
+        "User-Agent": "Opera/9.80 (Windows NT 6.1; WOW64) Presto/2.12.388 Version/12.18"}
 
-    r = requests.get(url)
+    url = "https://www.youtube.com/feeds/videos.xml?channel_id=" + channelId
+
+    r = requests.get(url, headers=headers)
 
     if r.status_code != 200:
         logger.warning("request to %s failed with status code %d, body: %s",
@@ -542,22 +578,30 @@ def getVideoIdsFromRSSFeed(channelId):
     if videoFeed is None or "feed" not in videoFeed:
         logger.warning("xml for url %s does not contain valid feed", url)
 
+    maxPublishedAt = 0
+
     for feedItem in videoFeed["feed"]["entry"]:
-        storedVideo = db.videos.find_one(
-            {"_id": feedItem["yt:videoId"]}, projection=["_id", "updatedAt"])
+        try:
+            storedVideo = db.videos.find_one(
+                {"_id": feedItem["yt:videoId"]}, projection=["_id", "updatedAt"])
 
-        if storedVideo is None:
-            insertVideo(feedItem)
-        else:
-            updateVideo(feedItem)
+            publishedAt = storeVideo(feedItem)
+
+            if publishedAt > maxPublishedAt:
+                maxPublishedAt = publishedAt
+
+        except Exception, e:
+            logger.exception(e)
+
+    return maxPublishedAt
 
 
-def insertVideo(feedItem):
+def storeVideo(feedItem):
     publishedAt = arrow.get(feedItem["published"]).timestamp
     updatedAt = arrow.get(feedItem["updated"]).timestamp
 
     vid = {
-        "_id": feedItem["yt:videoId"],
+        "id": feedItem["yt:videoId"],
         "title": feedItem["title"],
         "description": feedItem["media:group"]["media:description"],
         "publishedAt": publishedAt,
@@ -570,14 +614,10 @@ def insertVideo(feedItem):
 
     storeVideoWithStats(vid["channel"], vid)
 
-    # update videoCount and lastUploadAt on channel document
-
-
-def updateVideo(feedItem):
-    print "update", feedItem["yt:videoId"]
+    return publishedAt
 
 
 # readCurrentChannels()
 # readSubscriptions(startChannelId, 1)
 # addAdditionalSubscriptions()
-getVideoIdsFromRSSFeed("UCLKPfqBGqL4gaEvegb_If0Q")
+checkAllChannelsForNewVideos()
