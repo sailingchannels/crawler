@@ -8,12 +8,14 @@ import math
 import xmltodict
 import logging
 import arrow
+import os
 from pymongo import MongoClient
 from datetime import datetime, date, timedelta
 import detectlanguage
 from Queue import Queue
 from twython import Twython
 from apikeyprovider import APIKeyProvider
+from cmreslogging.handlers import CMRESHandler
 
 apiKeyProvider = APIKeyProvider(config.apiKey())
 videoKeyProvider = APIKeyProvider(config.apiVideoKeys())
@@ -21,11 +23,21 @@ videoKeyProvider = APIKeyProvider(config.apiVideoKeys())
 # logging
 logger = logging.getLogger("sailing-channels-crawler")
 logger.setLevel(logging.DEBUG)
+
 ch = logging.StreamHandler()
 formatter = logging.Formatter(
     '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
+
+print "environment", os.getenv("ENVIRONMENT")
+
+if os.getenv("ENVIRONMENT") == "production":
+    elasticHandler = CMRESHandler(hosts=[{"host": "elasticsearch", "port": 9200}],
+                                  auth_type=CMRESHandler.AuthType.NO_AUTH,
+                                  es_index_name="sailing-channels-crawler")
+
+    logger.addHandler(elasticHandler)
 
 # social networks
 twitter = Twython(config.twitter()["consumerKey"], config.twitter()[
@@ -245,7 +257,7 @@ def getChannelPopularityIndex(channelId, subscribers, views):
     return popSub, popView
 
 
-def addSingleChannel(subChannelId, i, level, readSubs=True, ignoreSailingTerm=False):
+def upsertChannel(subChannelId, level, readSubs=True, ignoreSailingTerm=False):
 
     try:
 
@@ -256,7 +268,7 @@ def addSingleChannel(subChannelId, i, level, readSubs=True, ignoreSailingTerm=Fa
                 {"_id": subChannelId}, projection=["lastCrawl"])
 
             if last_crawled:
-                if (datetime.now() - last_crawled["lastCrawl"]).total_seconds() < THREE_HOURS_IN_SECONDS:
+                if (datetime.now() - last_crawled["lastCrawl"]).total_seconds() < ONE_DAY_IN_SECONDS:
                     logger.info("skip %s lass crawl less than %d secs ago",
                                 subChannelId, ONE_HOUR_IN_SECONDS * 3)
                     return
@@ -273,7 +285,7 @@ def addSingleChannel(subChannelId, i, level, readSubs=True, ignoreSailingTerm=Fa
 
             # check if one of the sailing terms is available
             for term in sailingTerms:
-                if (term in i["snippet"]["title"].lower() or term in i["snippet"]["description"].lower()):
+                if (term in channel_detail["title"].lower() or term in channel_detail["description"].lower()):
                     hasSailingTerm = True
                     break
 
@@ -296,10 +308,10 @@ def addSingleChannel(subChannelId, i, level, readSubs=True, ignoreSailingTerm=Fa
 
                 channels[subChannelId] = {
                     "id": subChannelId,
-                    "title": i["snippet"]["title"],
-                    "description": i["snippet"]["description"],
+                    "title": channel_detail["title"],
+                    "description": channel_detail["description"],
                     "publishedAt": calendar.timegm(pd.utctimetuple()),
-                    "thumbnail": i["snippet"]["thumbnails"]["default"]["url"],
+                    "thumbnail": channel_detail["thumbnails"]["default"]["url"],
                     "subscribers": int(stats["subscriberCount"]),
                     "views": int(stats["viewCount"]),
                     "subscribersHidden": bool(stats["hiddenSubscriberCount"]),
@@ -456,7 +468,7 @@ def readSubscriptionsPage(channelId, pageToken=None, level=1):
         subChannelId = i["snippet"]["resourceId"]["channelId"]
 
         # store this channel
-        addSingleChannel(subChannelId, i, level, True)
+        upsertChannel(subChannelId, level, True)
 
     # is there a next page?
     if subs.has_key("nextPageToken"):
@@ -493,16 +505,11 @@ def addAdditionalSubscriptions():
 
     for a in adds:
 
-        # get info of additional channel
-        r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" +
-                         a + "&key=" + apiKeyProvider.apiKey())
-        result = r.json()
-
         try:
             logger.info("Additional channel %s will be added", a)
 
             # add this channel
-            addSingleChannel(a, result["items"][0], 0, False, True)
+            upsertChannel(a, 0, False, True)
 
             # check if channel is now available
             check_channel = db.channels.find_one({"_id": a})
@@ -550,11 +557,18 @@ def storeVideosFromRSSFeed(channelId):
     if r.status_code != 200:
         logger.warning("request to %s failed with status code %d, body: %s",
                        url, r.status_code, r.content)
+        return
 
     videoFeed = xmltodict.parse(r.content)
 
     if videoFeed is None or "feed" not in videoFeed:
         logger.warning("xml for url %s does not contain valid feed", url)
+        return
+
+    if "entry" not in videoFeed["feed"]:
+        logger.warning(
+            "xml for url %s does not contain any video entries", url)
+        return
 
     maxPublishedAt = 0
 
@@ -597,18 +611,11 @@ def storeVideo(feedItem):
 
 def updateCurrentChannels():
 
-    for cc in db.channels.find({"lastCrawl": {"$lt": datetime.now() - timedelta(hours=1)}}, projection=["_id"], limit=10).sort("lastCrawl", 1):
+    for cc in db.channels.find({}, projection=["_id"]):
 
         try:
             logger.info("Update existing channel %s with new data", cc["_id"])
-
-            # get info of additional channel
-            r = requests.get("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" +
-                             cc["_id"] + "&key=" + apiKeyProvider.apiKey())
-            result = r.json()
-
-            if result is not None and "items" in result and len(result["items"]) > 0:
-                addSingleChannel(cc["_id"], result["items"][0], 0, False, True)
+            upsertChannel(cc["_id"], 0, False, True)
         except Exception, e:
             logger.exception(e)
 
