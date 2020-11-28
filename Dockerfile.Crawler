@@ -1,0 +1,13 @@
+FROM ubuntu:16.04
+
+# INSTALL DEPENDENCIES
+RUN apt-get update -y && apt-get install -y python-pip python-setuptools openssl python-dev libssl-dev cron
+RUN pip install --upgrade pip
+
+ADD . /srv
+WORKDIR /srv
+
+RUN pip install -r requirements.txt
+
+# run the command on container startup
+CMD python /srv/crawler.py /srv/

@@ -44,7 +44,6 @@ twitter = Twython(config.twitter()["consumerKey"], config.twitter()[
     "consumerSecret"], config.twitter()["accessToken"], config.twitter()["accessSecret"])
 
 # config
-startChannelId = "UC5xDht2blPNWdVtl9PkDmgA"  # SailLife
 maxLevels = 3
 popSubsWeight = 0.5
 popViewsWeight = 0.5
@@ -257,7 +256,7 @@ def getChannelPopularityIndex(channelId, subscribers, views):
     return popSub, popView
 
 
-def upsertChannel(subChannelId, level, readSubs=True, ignoreSailingTerm=False):
+def upsertChannel(subChannelId, ignoreSailingTerm=False):
 
     try:
 
@@ -269,7 +268,7 @@ def upsertChannel(subChannelId, level, readSubs=True, ignoreSailingTerm=False):
 
             if last_crawled:
                 if (datetime.now() - last_crawled["lastCrawl"]).total_seconds() < ONE_DAY_IN_SECONDS:
-                    logger.info("skip %s lass crawl less than %d secs ago",
+                    logger.info("skip %s last crawl less than %d secs ago",
                                 subChannelId, ONE_HOUR_IN_SECONDS * 3)
                     return
 
@@ -293,6 +292,16 @@ def upsertChannel(subChannelId, level, readSubs=True, ignoreSailingTerm=False):
             logger.info("%s %s %d", subChannelId,
                         hasSailingTerm, int(stats["videoCount"]))
 
+            # this is not a sailing channel, so we will keep track of that id
+            if ignoreSailingTerm == False and hasSailingTerm == False:
+                db.nonsailingchannels.update_one(
+                    {"_id": subChannelId}, {
+                        "$set": {
+                            "_id": subChannelId,
+                            "decisionMadeAt": arrow.utcnow().timestamp
+                        }
+                    }, True)
+
             if ignoreSailingTerm == True:
                 hasSailingTerm = True
 
@@ -306,13 +315,18 @@ def upsertChannel(subChannelId, level, readSubs=True, ignoreSailingTerm=False):
                 pd = datetime.strptime(
                     channel_detail["publishedAt"], "%Y-%m-%dT%H:%M:%SZ")
 
+                subscriberCount = 0
+
+                if "subscriberCount" in stats:
+                    subscriberCount = int(stats["subscriberCount"])
+
                 channels[subChannelId] = {
                     "id": subChannelId,
                     "title": channel_detail["title"],
                     "description": channel_detail["description"],
                     "publishedAt": calendar.timegm(pd.utctimetuple()),
                     "thumbnail": channel_detail["thumbnails"]["default"]["url"],
-                    "subscribers": int(stats["subscriberCount"]),
+                    "subscribers": subscriberCount,
                     "views": int(stats["viewCount"]),
                     "subscribersHidden": bool(stats["hiddenSubscriberCount"]),
                     "lastCrawl": datetime.now()
@@ -327,8 +341,9 @@ def upsertChannel(subChannelId, level, readSubs=True, ignoreSailingTerm=False):
                     logger.exception(e)
 
                 # get popularity
-                popSub, popView = getChannelPopularityIndex(subChannelId, int(
-                    stats["subscriberCount"]), int(stats["viewCount"]))
+                popSub, popView = getChannelPopularityIndex(
+                    subChannelId, subscriberCount, int(stats["viewCount"]))
+
                 channels[subChannelId]["popularity"] = {
                     "subscribers": popSub,
                     "views": popView,
@@ -344,6 +359,7 @@ def upsertChannel(subChannelId, level, readSubs=True, ignoreSailingTerm=False):
                 hasLanguage = False
                 ch_lang = db.channels.find_one(
                     {"_id": subChannelId}, projection=["detectedLanguage"])
+
                 if ch_lang:
                     if ch_lang.has_key("detectedLanguage"):
                         hasLanguage = True
@@ -423,7 +439,6 @@ def upsertChannel(subChannelId, level, readSubs=True, ignoreSailingTerm=False):
 
                 # upsert data in mongodb
                 try:
-
                     db.channels.update_one({
                         "_id": subChannelId
                     }, {
@@ -434,72 +449,15 @@ def upsertChannel(subChannelId, level, readSubs=True, ignoreSailingTerm=False):
                 except Exception, e:
                     logger.exception(e)
 
-                # read sub level subscriptions
-                subLevel = level + 1
-                if readSubs == True:
-                    readSubscriptions(subChannelId, subLevel)
     except Exception, e:
         logger.exception(e)
 
 
-def readSubscriptionsPage(channelId, pageToken=None, level=1):
-
-    url = "https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&maxResults=50&channelId=" + \
-        channelId + "&key=" + apiKeyProvider.apiKey()
-
-    if pageToken != None:
-        url += "&pageToken=" + pageToken
-
-    # fetch subscriptions of channel
-    r = requests.get(url)
-    subs = r.json()
-
-    # error? ignore!
-    if r.status_code != 200:
-        logger.warning("error %d %s %d", r.status_code, channelId, level)
-        return None
-
-    # loop channel items in result set
-    for i in subs["items"]:
-
-        if i["snippet"]["resourceId"]["kind"] != "youtube#channel":
-            continue
-
-        subChannelId = i["snippet"]["resourceId"]["channelId"]
-
-        # store this channel
-        upsertChannel(subChannelId, level, True)
-
-    # is there a next page?
-    if subs.has_key("nextPageToken"):
-        return subs["nextPageToken"]
-    else:
-        return None
-
-
-def readSubscriptions(channelId, level=1):
-
-    # we reached the maximum level of recursion
-    if level >= maxLevels:
-        return None
-
-    nextPage = None
-    nextPageNew = None
-
-    while True:
-        nextPageNew = readSubscriptionsPage(channelId, nextPage, level)
-
-        if nextPageNew == None:
-            break
-
-        nextPage = nextPageNew
-
-
-def addAdditionalSubscriptions():
+def addAdditionalChannels():
 
     adds = []
 
-    for cc in db.additional.find({}):
+    for cc in db.additional.find({}, limit=100):
         if not channels.has_key(cc["_id"]):
             adds.append(cc["_id"])
 
@@ -509,7 +467,7 @@ def addAdditionalSubscriptions():
             logger.info("Additional channel %s will be added", a)
 
             # add this channel
-            upsertChannel(a, 0, False, True)
+            upsertChannel(a, a["ignoreSailingTerm"])
 
             # check if channel is now available
             check_channel = db.channels.find_one({"_id": a})
@@ -615,41 +573,17 @@ def updateCurrentChannels():
 
         try:
             logger.info("Update existing channel %s with new data", cc["_id"])
-            upsertChannel(cc["_id"], 0, False, True)
+            upsertChannel(cc["_id"], True)
         except Exception, e:
             logger.exception(e)
 
 
-def shouldReadSubscriptions():
-    settings = db.settings.find_one({"_id": "lastSubscriberCrawl"})
-
-    db.settings.update_one({"_id": "lastSubscriberCrawl"}, {
-                           "$set": {"value": arrow.utcnow().timestamp}}, upsert=True)
-
-    if settings is not None and "value" in settings:
-        delta = math.fabs(int(settings["value"]) - arrow.utcnow().timestamp)
-        result = delta >= ONE_DAY_IN_SECONDS
-
-        logger.info(
-            "read subscriptions? %s since time delta since last crawl is %d", result, delta)
-
-        return result
-
-    logger.info("no lastSubscriberCrawl yet, writing first one")
-
-    return True
-
-
 while True:
-
-    if shouldReadSubscriptions():
-        readSubscriptions(startChannelId, 1)
-
-    checkAllChannelsForNewVideos()
-
-    addAdditionalSubscriptions()
+    addAdditionalChannels()
 
     updateCurrentChannels()
+
+    checkAllChannelsForNewVideos()
 
     logger.info("*** CYCLE COMPLETED ***")
 
