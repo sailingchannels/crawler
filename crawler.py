@@ -9,7 +9,7 @@ import xmltodict
 import logging
 import arrow
 import os
-from pymongo import MongoClient
+from pymongo import MongoClient, DESCENDING
 from datetime import datetime, date, timedelta
 import detectlanguage
 from Queue import Queue
@@ -44,9 +44,6 @@ twitter = Twython(config.twitter()["consumerKey"], config.twitter()[
     "consumerSecret"], config.twitter()["accessToken"], config.twitter()["accessSecret"])
 
 # config
-maxLevels = 3
-popSubsWeight = 0.5
-popViewsWeight = 0.5
 sailingTerms = []
 blacklist = []
 THREE_HOURS_IN_SECONDS = 10800
@@ -224,230 +221,233 @@ def readStatistics(channelId):
     return stats["items"][0]["statistics"], stats["items"][0]["snippet"], stats["items"][0]["brandingSettings"]
 
 
-def getChannelPopularityIndex(channelId, subscribers, views):
+def linreg(X, Y):
+    """
+    return a,b in solution to y = ax + b such that root mean square distance between trend line and original points is minimized
+    """
+    N = len(X)
+    Sx = Sy = Sxx = Syy = Sxy = 0.0
+    for x, y in zip(X, Y):
+        Sx = Sx + x
+        Sy = Sy + y
+        Sxx = Sxx + x*x
+        Syy = Syy + y*y
+        Sxy = Sxy + x*y
+    det = Sxx * N - Sx * Sx
+    return (Sxy * N - Sy * Sx)/det, (Sxx * Sy - Sx * Sxy)/det
+
+
+def getChannelPopularityIndex(channelId):
 
     # fetch subs and views from 7 days ago
-    daysAgo = date.today() - timedelta(days=2)
-
-    daysSubs = db.subscribers.find_one({
-        "_id": {
-            "channel": channelId,
-            "date": int(daysAgo.strftime("%Y%m%d"))
-        }
-    })
-
-    daysViews = db.views.find_one({
-        "_id": {
-            "channel": channelId,
-            "date": int(daysAgo.strftime("%Y%m%d"))
-        }
-    })
-
-    popSub = 0
-    popView = 0
+    daysSubsCursor = db.subscribers.find({
+        "_id.channel": channelId
+    }, limit=7, projection=["subscribers"], sort=[("date", DESCENDING)])
 
     # calculate subscriber gain
-    if subscribers > 0 and daysSubs is not None and daysSubs.has_key("subscribers"):
-        popSub = math.fabs(subscribers - daysSubs["subscribers"]) / subscribers
+    if daysSubsCursor is not None:
+        subsOverTime = [sub["subscribers"] for sub in daysSubsCursor]
 
-    if views > 0 and daysViews is not None and daysViews.has_key("views"):
-        popView = math.fabs(views - daysViews["views"]) / views
+        if len(subsOverTime) <= 0:
+            return 0
 
-    return popSub, popView
+        a, b = linreg(range(len(subsOverTime)), subsOverTime)
+        return a
+
+    return 0
 
 
 def upsertChannel(subChannelId, ignoreSailingTerm=False):
 
     try:
+        last_crawled = db.channels.find_one(
+            {"_id": subChannelId}, projection=["lastCrawl"])
 
-        # store this channel
-        if not channels.has_key(subChannelId):
-
-            last_crawled = db.channels.find_one(
-                {"_id": subChannelId}, projection=["lastCrawl"])
-
-            if last_crawled:
-                if (datetime.now() - last_crawled["lastCrawl"]).total_seconds() < ONE_DAY_IN_SECONDS:
-                    logger.info("skip %s last crawl less than %d secs ago",
-                                subChannelId, ONE_HOUR_IN_SECONDS * 3)
-                    return
-
-            stats, channel_detail, branding_settings = readStatistics(
-                subChannelId)
-
-            hasSailingTerm = False
-
-            if stats is None:
-                logger.warning(
-                    "could not read stats for channel %s", subChannelId)
+        if last_crawled:
+            if (datetime.now() - last_crawled["lastCrawl"]).total_seconds() < ONE_DAY_IN_SECONDS:
+                logger.info("skip %s last crawl less than %d secs ago",
+                            subChannelId, ONE_HOUR_IN_SECONDS)
                 return
 
-            # check if one of the sailing terms is available
-            for term in sailingTerms:
-                if (term in channel_detail["title"].lower() or term in channel_detail["description"].lower()):
-                    hasSailingTerm = True
-                    break
+        logger.info("Update channel %s with new data", subChannelId)
 
-            # log what happened to the channel
-            logger.info("%s %s %d", subChannelId,
-                        hasSailingTerm, int(stats["videoCount"]))
+        stats, channel_detail, branding_settings = readStatistics(
+            subChannelId)
 
-            # this is not a sailing channel, so we will keep track of that id
-            if ignoreSailingTerm == False and hasSailingTerm == False:
-                db.nonsailingchannels.update_one(
-                    {"_id": subChannelId}, {
-                        "$set": {
-                            "_id": subChannelId,
-                            "decisionMadeAt": arrow.utcnow().timestamp
-                        }
-                    }, True)
+        hasSailingTerm = False
 
-            if ignoreSailingTerm == True:
+        if stats is None:
+            logger.warning(
+                "could not read stats for channel %s", subChannelId)
+            return
+
+        # check if one of the sailing terms is available
+        for term in sailingTerms:
+            if (term in channel_detail["title"].lower() or term in channel_detail["description"].lower()):
                 hasSailingTerm = True
+                break
 
-            # blacklisted channel
-            if subChannelId in blacklist:
-                hasSailingTerm = False
-                deleteChannel(subChannelId)
+        # log what happened to the channel
+        logger.info("%s %s %d", subChannelId,
+                    hasSailingTerm, int(stats["videoCount"]))
 
-            if int(stats["videoCount"]) > 0 and hasSailingTerm:
+        # this is not a sailing channel, so we will keep track of that id
+        if ignoreSailingTerm == False and hasSailingTerm == False:
+            db.nonsailingchannels.update_one(
+                {"_id": subChannelId}, {
+                    "$set": {
+                        "_id": subChannelId,
+                        "decisionMadeAt": arrow.utcnow().timestamp
+                    }
+                }, True)
 
-                pd = datetime.strptime(
-                    channel_detail["publishedAt"], "%Y-%m-%dT%H:%M:%SZ")
+        if ignoreSailingTerm == True:
+            hasSailingTerm = True
 
-                subscriberCount = 0
+        # blacklisted channel
+        if subChannelId in blacklist:
+            hasSailingTerm = False
+            deleteChannel(subChannelId)
 
-                if "subscriberCount" in stats:
-                    subscriberCount = int(stats["subscriberCount"])
+        if int(stats["videoCount"]) > 0 and hasSailingTerm:
 
-                channels[subChannelId] = {
-                    "id": subChannelId,
-                    "title": channel_detail["title"],
-                    "description": channel_detail["description"],
-                    "publishedAt": calendar.timegm(pd.utctimetuple()),
-                    "thumbnail": channel_detail["thumbnails"]["default"]["url"],
-                    "subscribers": subscriberCount,
-                    "views": int(stats["viewCount"]),
-                    "subscribersHidden": bool(stats["hiddenSubscriberCount"]),
-                    "lastCrawl": datetime.now()
-                }
+            pd = datetime.strptime(
+                channel_detail["publishedAt"], "%Y-%m-%dT%H:%M:%SZ")
 
-                # add keywords if available
-                try:
-                    if branding_settings is not None and "channel" in branding_settings and "keywords" in branding_settings["channel"]:
-                        channels[subChannelId]["keywords"] = branding_settings["channel"]["keywords"].split(
-                            " ")
-                except Exception, e:
-                    logger.exception(e)
+            subscriberCount = 0
 
-                # get popularity
-                popSub, popView = getChannelPopularityIndex(
-                    subChannelId, subscriberCount, int(stats["viewCount"]))
+            if "subscriberCount" in stats:
+                subscriberCount = int(stats["subscriberCount"])
 
-                channels[subChannelId]["popularity"] = {
-                    "subscribers": popSub,
-                    "views": popView,
-                    "total": popSub * popSubsWeight + popView * popViewsWeight
-                }
+            channels[subChannelId] = {
+                "id": subChannelId,
+                "title": channel_detail["title"],
+                "description": channel_detail["description"],
+                "publishedAt": calendar.timegm(pd.utctimetuple()),
+                "thumbnail": channel_detail["thumbnails"]["default"]["url"],
+                "subscribers": subscriberCount,
+                "views": int(stats["viewCount"]),
+                "subscribersHidden": bool(stats["hiddenSubscriberCount"]),
+                "lastCrawl": datetime.now()
+            }
 
-                lotsOfText = channels[subChannelId]["description"] + " "
+            # add keywords if available
+            try:
+                if branding_settings is not None and "channel" in branding_settings and "keywords" in branding_settings["channel"]:
+                    channels[subChannelId]["keywords"] = branding_settings["channel"]["keywords"].split(
+                        " ")
+            except Exception, e:
+                logger.exception(e)
 
-                # add country info if available
-                if channel_detail.has_key("country"):
-                    channels[subChannelId]["country"] = channel_detail["country"].lower()
+            # get popularity
+            popSub = getChannelPopularityIndex(subChannelId)
 
-                hasLanguage = False
-                ch_lang = db.channels.find_one(
-                    {"_id": subChannelId}, projection=["detectedLanguage"])
+            sys.exit(0)
 
-                if ch_lang:
-                    if ch_lang.has_key("detectedLanguage"):
-                        hasLanguage = True
+            channels[subChannelId]["popularity"] = {
+                "subscribers": popSub,
+                "views": 0,
+                "total": popSub
+            }
 
-                try:
-                    useDetectLangKey = 0
-                    detectlanguage.configuration.api_key = config.detectLanguage()[
-                        useDetectLangKey]
+            lotsOfText = channels[subChannelId]["description"] + " "
 
-                    # detect the language of the channel
-                    if not hasLanguage and devMode == False:
+            # add country info if available
+            if channel_detail.has_key("country"):
+                channels[subChannelId]["country"] = channel_detail["country"].lower()
 
-                        channels[subChannelId]["language"] = "en"
+            hasLanguage = False
+            ch_lang = db.channels.find_one(
+                {"_id": subChannelId}, projection=["detectedLanguage"])
 
-                        runLoop = True
-                        while runLoop:
-                            try:
-                                detectedLang = detectlanguage.detect(
-                                    lotsOfText)
+            if ch_lang:
+                if ch_lang.has_key("detectedLanguage"):
+                    hasLanguage = True
+
+            try:
+                useDetectLangKey = 0
+                detectlanguage.configuration.api_key = config.detectLanguage()[
+                    useDetectLangKey]
+
+                # detect the language of the channel
+                if not hasLanguage and devMode == False:
+
+                    channels[subChannelId]["language"] = "en"
+
+                    runLoop = True
+                    while runLoop:
+                        try:
+                            detectedLang = detectlanguage.detect(
+                                lotsOfText)
+                            runLoop = False
+                        except:
+                            useDetectLangKey = useDetectLangKey + 1
+
+                            if useDetectLangKey > len(config.detectLanguage()):
                                 runLoop = False
-                            except:
-                                useDetectLangKey = useDetectLangKey + 1
+                            else:
+                                detectlanguage.configuration.api_key = config.detectLanguage()[
+                                    useDetectLangKey]
 
-                                if useDetectLangKey > len(config.detectLanguage()):
-                                    runLoop = False
-                                else:
-                                    detectlanguage.configuration.api_key = config.detectLanguage()[
-                                        useDetectLangKey]
+                    # did we find a language in the text body?
+                    if len(detectedLang) > 0:
 
-                        # did we find a language in the text body?
-                        if len(detectedLang) > 0:
+                        # is the detection reliable?
+                        if detectedLang[0]["isReliable"]:
+                            channels[subChannelId]["language"] = detectedLang[0]["language"]
+                            channels[subChannelId]["detectedLanguage"] = True
+            except Exception, e:
+                logger.exception(e)
 
-                            # is the detection reliable?
-                            if detectedLang[0]["isReliable"]:
-                                channels[subChannelId]["language"] = detectedLang[0]["language"]
-                                channels[subChannelId]["detectedLanguage"] = True
-                except Exception, e:
-                    logger.exception(e)
+            # insert subscriber counts
+            try:
+                db.subscribers.update_one({
+                    "_id": {
+                        "channel": subChannelId,
+                        "date": int(date.today().strftime("%Y%m%d"))
+                    }
+                }, {
+                    "$set": {
+                        "year": date.today().year,
+                        "month": date.today().month,
+                        "day": date.today().day,
+                        "date": datetime.utcnow(),
+                        "subscribers": channels[subChannelId]["subscribers"]
+                    }
+                }, True)
+            except Exception, e:
+                logger.exception(e)
 
-                # insert subscriber counts
-                try:
-                    db.subscribers.update_one({
-                        "_id": {
-                            "channel": subChannelId,
-                            "date": int(date.today().strftime("%Y%m%d"))
-                        }
-                    }, {
-                        "$set": {
-                            "year": date.today().year,
-                            "month": date.today().month,
-                            "day": date.today().day,
-                            "date": datetime.utcnow(),
-                            "subscribers": channels[subChannelId]["subscribers"]
-                        }
-                    }, True)
-                except Exception, e:
-                    logger.exception(e)
+            # insert view counts
+            try:
+                db.views.update_one({
+                    "_id": {
+                        "channel": subChannelId,
+                        "date": int(date.today().strftime("%Y%m%d"))
+                    }
+                }, {
+                    "$set": {
+                        "year": date.today().year,
+                        "month": date.today().month,
+                        "day": date.today().day,
+                        "date": datetime.utcnow(),
+                        "views": channels[subChannelId]["views"]
+                    }
+                }, True)
+            except Exception, e:
+                logger.exception(e)
 
-                # insert view counts
-                try:
-                    db.views.update_one({
-                        "_id": {
-                            "channel": subChannelId,
-                            "date": int(date.today().strftime("%Y%m%d"))
-                        }
-                    }, {
-                        "$set": {
-                            "year": date.today().year,
-                            "month": date.today().month,
-                            "day": date.today().day,
-                            "date": datetime.utcnow(),
-                            "views": channels[subChannelId]["views"]
-                        }
-                    }, True)
-                except Exception, e:
-                    logger.exception(e)
+            # upsert data in mongodb
+            try:
+                db.channels.update_one({
+                    "_id": subChannelId
+                }, {
+                    "$set": channels[subChannelId]
+                }, True)
 
-                # upsert data in mongodb
-                try:
-                    db.channels.update_one({
-                        "_id": subChannelId
-                    }, {
-                        "$set": channels[subChannelId]
-                    }, True)
-
-                    logger.info("updated %s", subChannelId)
-                except Exception, e:
-                    logger.exception(e)
+                logger.info("updated %s", subChannelId)
+            except Exception, e:
+                logger.exception(e)
 
     except Exception, e:
         logger.exception(e)
@@ -458,8 +458,7 @@ def addAdditionalChannels():
     adds = []
 
     for cc in db.additional.find({}, limit=100):
-        if not channels.has_key(cc["_id"]):
-            adds.append(cc["_id"])
+        adds.append(cc["_id"])
 
     for a in adds:
 
@@ -572,13 +571,14 @@ def updateCurrentChannels():
     for cc in db.channels.find({}, projection=["_id"]):
 
         try:
-            logger.info("Update existing channel %s with new data", cc["_id"])
             upsertChannel(cc["_id"], True)
         except Exception, e:
             logger.exception(e)
 
 
 while True:
+    logger.info("*** CYCLE STARTED ***")
+
     addAdditionalChannels()
 
     updateCurrentChannels()
