@@ -239,19 +239,21 @@ def linreg(X, Y):
 
 def getChannelPopularityIndex(channelId):
 
-    # fetch subs and views from 7 days ago
-    daysSubsCursor = db.subscribers.find({
+    # fetch views from 7 days ago
+    daysViewsCursor = db.views.find({
         "_id.channel": channelId
-    }, limit=7, projection=["subscribers"], sort=[("date", DESCENDING)])
+    }, limit=3, projection=["views"], sort=[("date", DESCENDING)])
 
-    # calculate subscriber gain
-    if daysSubsCursor is not None:
-        subsOverTime = [sub["subscribers"] for sub in daysSubsCursor]
+    # calculate view gain
+    if daysViewsCursor is not None:
+        viewsOverTime = [view["views"] for view in daysViewsCursor]
 
-        if len(subsOverTime) <= 0:
+        viewsOverTime.reverse()
+
+        if len(viewsOverTime) <= 0:
             return 0
 
-        a, b = linreg(range(len(subsOverTime)), subsOverTime)
+        a, b = linreg(range(len(viewsOverTime)), viewsOverTime)
         return a
 
     return 0
@@ -340,14 +342,14 @@ def upsertChannel(subChannelId, ignoreSailingTerm=False):
                 logger.exception(e)
 
             # get popularity
-            popSub = getChannelPopularityIndex(subChannelId)
+            popView = getChannelPopularityIndex(subChannelId)
 
             sys.exit(0)
 
             channels[subChannelId]["popularity"] = {
-                "subscribers": popSub,
-                "views": 0,
-                "total": popSub
+                "subscribers": 0,
+                "views": popView,
+                "total": popView
             }
 
             lotsOfText = channels[subChannelId]["description"] + " "
@@ -576,8 +578,30 @@ def updateCurrentChannels():
             logger.exception(e)
 
 
+def updatePopularity():
+
+    for cc in db.channels.find({}, projection=["_id", "views"]):
+        popViews = getChannelPopularityIndex(cc["_id"])
+
+        print("set popularity for channel", cc["_id"], popViews)
+
+        db.channels.update_one({
+            "_id": cc["_id"]
+        }, {
+            "$set": {
+                "popularity": {
+                    "subscribers": 0,
+                    "views": popViews,
+                    "total": popViews
+                }
+            }
+        })
+
+
 while True:
     logger.info("*** CYCLE STARTED ***")
+
+    updatePopularity()
 
     addAdditionalChannels()
 
