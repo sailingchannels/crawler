@@ -344,8 +344,6 @@ def upsertChannel(subChannelId, ignoreSailingTerm=False):
             # get popularity
             popView = getChannelPopularityIndex(subChannelId)
 
-            sys.exit(0)
-
             channels[subChannelId]["popularity"] = {
                 "subscribers": 0,
                 "views": popView,
@@ -452,31 +450,27 @@ def upsertChannel(subChannelId, ignoreSailingTerm=False):
                 logger.exception(e)
 
     except Exception, e:
+        print e
         logger.exception(e)
 
 
 def addAdditionalChannels():
 
-    adds = []
-
-    for cc in db.additional.find({}, limit=100):
-        adds.append(cc["_id"])
-
-    for a in adds:
+    for a in db.additional.find({}, limit=100):
 
         try:
-            logger.info("Additional channel %s will be added", a)
+            logger.info("Additional channel %s will be added", a["_id"])
 
             # add this channel
-            upsertChannel(a, a["ignoreSailingTerm"])
+            upsertChannel(a["_id"], a["ignoreSailingTerm"])
 
             # check if channel is now available
-            check_channel = db.channels.find_one({"_id": a})
+            check_channel = db.channels.find_one({"_id": a["_id"]})
             if check_channel != None:
                 logger.info(
-                    "Additional channel %s will be deleted now, it's added to the channels list", a)
+                    "Additional channel %s will be deleted now, it's added to the channels list", a["_id"])
 
-                db.additional.delete_one({"_id": a})
+                db.additional.delete_one({"_id": a["_id"]})
 
         except Exception, e:
             logger.exception(e)
@@ -601,7 +595,7 @@ def updatePopularity():
 while True:
     logger.info("*** CYCLE STARTED ***")
 
-    updatePopularity()
+    # updatePopularity()
 
     addAdditionalChannels()
 
