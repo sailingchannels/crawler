@@ -15,7 +15,6 @@ import detectlanguage
 from Queue import Queue
 from twython import Twython
 from apikeyprovider import APIKeyProvider
-from cmreslogging.handlers import CMRESHandler
 
 apiKeyProvider = APIKeyProvider(config.apiKey())
 videoKeyProvider = APIKeyProvider(config.apiVideoKeys())
@@ -31,13 +30,6 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 print "environment", os.getenv("ENVIRONMENT")
-
-if os.getenv("ENVIRONMENT") == "production":
-    elasticHandler = CMRESHandler(hosts=[{"host": "elasticsearch", "port": 9200}],
-                                  auth_type=CMRESHandler.AuthType.NO_AUTH,
-                                  es_index_name="sailing-channels-crawler")
-
-    logger.addHandler(elasticHandler)
 
 # social networks
 twitter = Twython(config.twitter()["consumerKey"], config.twitter()[
@@ -237,28 +229,6 @@ def linreg(X, Y):
     return (Sxy * N - Sy * Sx)/det, (Sxx * Sy - Sx * Sxy)/det
 
 
-def getChannelPopularityIndex(channelId):
-
-    # fetch views from 7 days ago
-    daysViewsCursor = db.views.find({
-        "_id.channel": channelId
-    }, limit=3, projection=["views"], sort=[("date", DESCENDING)])
-
-    # calculate view gain
-    if daysViewsCursor is not None:
-        viewsOverTime = [view["views"] for view in daysViewsCursor]
-
-        viewsOverTime.reverse()
-
-        if len(viewsOverTime) <= 0:
-            return 0
-
-        a, b = linreg(range(len(viewsOverTime)), viewsOverTime)
-        return a
-
-    return 0
-
-
 def upsertChannel(subChannelId, ignoreSailingTerm=False):
 
     try:
@@ -340,15 +310,6 @@ def upsertChannel(subChannelId, ignoreSailingTerm=False):
                         " ")
             except Exception, e:
                 logger.exception(e)
-
-            # get popularity
-            popView = getChannelPopularityIndex(subChannelId)
-
-            channels[subChannelId]["popularity"] = {
-                "subscribers": 0,
-                "views": popView,
-                "total": popView
-            }
 
             lotsOfText = channels[subChannelId]["description"] + " "
 
@@ -572,30 +533,8 @@ def updateCurrentChannels():
             logger.exception(e)
 
 
-def updatePopularity():
-
-    for cc in db.channels.find({}, projection=["_id", "views"]):
-        popViews = getChannelPopularityIndex(cc["_id"])
-
-        print("set popularity for channel", cc["_id"], popViews)
-
-        db.channels.update_one({
-            "_id": cc["_id"]
-        }, {
-            "$set": {
-                "popularity": {
-                    "subscribers": 0,
-                    "views": popViews,
-                    "total": popViews
-                }
-            }
-        })
-
-
 while True:
     logger.info("*** CYCLE STARTED ***")
-
-    # updatePopularity()
 
     addAdditionalChannels()
 
