@@ -1,5 +1,4 @@
 import requests
-import json
 import config
 import sys
 import time
@@ -9,7 +8,6 @@ import os
 import arrow
 from pymongo import MongoClient
 from apikeyprovider import APIKeyProvider
-from cmreslogging.handlers import CMRESHandler
 
 apiKeyProvider = APIKeyProvider(config.apiKey())
 
@@ -28,13 +26,6 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 print "environment", os.getenv("ENVIRONMENT")
-
-if os.getenv("ENVIRONMENT") == "production":
-    elasticHandler = CMRESHandler(hosts=[{"host": "elasticsearch", "port": 9200}],
-                                  auth_type=CMRESHandler.AuthType.NO_AUTH,
-                                  es_index_name="sailing-channels-discovery")
-
-    logger.addHandler(elasticHandler)
 
 # open mongodb connection
 client = MongoClient(config.mongoDB())

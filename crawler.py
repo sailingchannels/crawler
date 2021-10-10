@@ -213,22 +213,6 @@ def readStatistics(channelId):
     return stats["items"][0]["statistics"], stats["items"][0]["snippet"], stats["items"][0]["brandingSettings"]
 
 
-def linreg(X, Y):
-    """
-    return a,b in solution to y = ax + b such that root mean square distance between trend line and original points is minimized
-    """
-    N = len(X)
-    Sx = Sy = Sxx = Syy = Sxy = 0.0
-    for x, y in zip(X, Y):
-        Sx = Sx + x
-        Sy = Sy + y
-        Sxx = Sxx + x*x
-        Syy = Syy + y*y
-        Sxy = Sxy + x*y
-    det = Sxx * N - Sx * Sx
-    return (Sxy * N - Sy * Sx)/det, (Sxx * Sy - Sx * Sxy)/det
-
-
 def upsertChannel(subChannelId, ignoreSailingTerm=False):
 
     try:
@@ -425,13 +409,7 @@ def addAdditionalChannels():
             # add this channel
             upsertChannel(a["_id"], a["ignoreSailingTerm"])
 
-            # check if channel is now available
-            check_channel = db.channels.find_one({"_id": a["_id"]})
-            if check_channel != None:
-                logger.info(
-                    "Additional channel %s will be deleted now, it's added to the channels list", a["_id"])
-
-                db.additional.delete_one({"_id": a["_id"]})
+            db.additional.delete_one({"_id": a["_id"]})
 
         except Exception, e:
             logger.exception(e)
