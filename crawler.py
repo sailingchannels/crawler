@@ -488,9 +488,6 @@ def storeVideosFromRSSFeed(channelId):
 
     for feedItem in videoFeed["feed"]["entry"]:
         try:
-            storedVideo = db.videos.find_one(
-                {"_id": feedItem["yt:videoId"]}, projection=["_id", "updatedAt"])
-
             publishedAt = storeVideo(feedItem)
 
             if publishedAt > maxPublishedAt:
