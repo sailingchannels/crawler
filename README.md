@@ -1,15 +1,15 @@
 Additional Channel Repo
 
 - [x] Read all additional channels
-- [ ] Delete additional channel
+- [x] Delete additional channel
 
 Channel Repo
 
-- [ ] Get last crawl date of a single channel
-- [ ] Delete channel
-- [ ] Get detectedLanguage of a single channel
-- [ ] Upsert channel info
-- [ ] Find ids of all channels
+- [x] Get last crawl date of a single channel
+- [x] Delete channel
+- [x] Get detectedLanguage of a single channel
+- [x] Upsert channel info
+- [x] Find ids of all channels
 
 Views Repo
 
