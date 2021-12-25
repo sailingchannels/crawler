@@ -11,31 +11,17 @@ pub struct VideoRepository {
 impl VideoRepository {
     pub fn new(client: &Client) -> VideoRepository {
         let db = client.database("sailing-channels");
-        let channels = db.collection::<Document>("channels");
+        let channels = db.collection::<Document>("videos");
 
         VideoRepository {
             collection: channels,
         }
     }
 
-    pub async fn get_last_crawl_date(&self, id: String) -> Result<DateTime, Error> {
-        let find_one_options = FindOneOptions::builder()
-            .projection(doc! {"lastCrawl": 1})
-            .build();
-
-        let channel = self
-            .collection
-            .find_one(doc! {"_id": id}, find_one_options)
-            .await?
-            .unwrap();
-
-        let last_crawl = channel.get_datetime("lastCrawl")?;
-
-        Ok(last_crawl.clone())
-    }
-
-    pub async fn delete(&self, channel_id: String) -> Result<(), anyhow::Error> {
-        self.collection.delete_one(doc! {"_id": id}, None).await?;
+    pub async fn delete_by_channel(&self, channel_id: String) -> Result<(), anyhow::Error> {
+        self.collection
+            .delete_many(doc! {"channel": channel_id}, None)
+            .await?;
 
         Ok(())
     }

@@ -15,8 +15,10 @@ impl ViewRepository {
         }
     }
 
-    pub async fn delete(&self, id: String) -> Result<(), anyhow::Error> {
-        self.collection.delete_one(doc! {"_id": id}, None).await?;
+    pub async fn delete_by_channel(&self, channel_id: String) -> Result<(), anyhow::Error> {
+        self.collection
+            .delete_many(doc! {"_id": {"channel": channel_id}}, None)
+            .await?;
 
         Ok(())
     }
