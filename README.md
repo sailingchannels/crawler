@@ -14,17 +14,19 @@ Channel Repo
 Views Repo
 
 - [ ] Delete views by channel
-- [ ] Upsert views count per channel per day
+- [x] Upsert views count per channel per day
 
 Subscriptions Repo
 
 - [ ] Delete subscriptions by channel
-- [ ] Upsert subscribers count per channel per day
+- [x] Upsert subscribers count per channel per day
 
 Videos Repo
 
+- [ ] Get by video id
+- [ ] Upsert
 - [ ] Delete videos by channel
 
 Non Sailing Channel Repo
 
-- [ ] Upsert nonsailingchannels
+- [x] Upsert nonsailingchannels
