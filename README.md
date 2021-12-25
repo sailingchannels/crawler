@@ -33,8 +33,8 @@ Non Sailing Channel Repo
 
 Blacklist
 
-- [ ] Get all
+- [x] Get all
 
 Sailing Terms
 
-- [ ] Get all
+- [x] Get all
