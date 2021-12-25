@@ -1,4 +1,3 @@
-
 use mongodb::bson::{doc, Document};
 use mongodb::{Client, Collection};
 
