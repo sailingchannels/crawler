@@ -28,7 +28,7 @@ pub async fn main() -> Result<(), anyhow::Error> {
 
     let mut tasks = vec![];
 
-    let (tx, mut rx): (Sender<String>, Receiver<String>) = channel(32);
+    let (tx, mut rx): (Sender<String>, Receiver<String>) = channel(usize::MAX);
 
     let additional_channel_crawling_task = task::spawn(async move {
         let additional_channel_repo = AdditionalChannelRepository::new(&client);
@@ -43,7 +43,6 @@ pub async fn main() -> Result<(), anyhow::Error> {
     let channel_scraper_task = task::spawn(async move {
         info!("Start channel scrape listener");
 
-        // Start receiving messages
         while let Some(channel_id) = rx.recv().await {
             info!("Received channel id: {}", channel_id);
         }

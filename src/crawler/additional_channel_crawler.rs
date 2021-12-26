@@ -43,6 +43,7 @@ impl AdditionalChannelCrawler {
                 "Wait for {} seconds until next crawl",
                 fifteen_minutes_in_seconds
             );
+
             sleep(Duration::from_secs(fifteen_minutes_in_seconds)).await;
         }
     }
