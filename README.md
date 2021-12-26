@@ -1,3 +1,7 @@
+# Sailing Channels ⛵️ Crawler
+
+## Repos
+
 Additional Channel Repo
 
 - [x] Read all additional channels
@@ -23,7 +27,7 @@ Subscriptions Repo
 
 Videos Repo
 
-- [ ] Get by video id
+- [x] Get by video id
 - [x] Upsert
 - [x] Delete videos by channel
 

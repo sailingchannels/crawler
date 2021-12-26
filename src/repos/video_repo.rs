@@ -18,6 +18,24 @@ impl VideoRepository {
         }
     }
 
+    pub async fn get_by_id(&self, id: String) -> Result<Document, Error> {
+        let find_options = FindOneOptions::builder()
+            .projection(doc! {
+                "_id" : 1,
+                "updatedAt" : 1,
+                "publishedAt": 1
+            })
+            .build();
+
+        let video = self
+            .collection
+            .find_one(doc! {"_id": id}, find_options)
+            .await?
+            .unwrap();
+
+        Ok(video)
+    }
+
     pub async fn delete_by_channel(&self, channel_id: String) -> Result<(), anyhow::Error> {
         self.collection
             .delete_many(doc! {"channel": channel_id}, None)
