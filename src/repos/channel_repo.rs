@@ -63,21 +63,19 @@ impl ChannelRepository {
         Ok(detected_language.to_string())
     }
 
-    pub async fn delete(&self, id: String) -> Result<(), anyhow::Error> {
+    pub async fn delete(&self, id: &str) -> Result<(), anyhow::Error> {
         self.collection.delete_one(doc! {"_id": id}, None).await?;
 
         Ok(())
     }
 
-    pub async fn upsert(&self, id: String, channel: Document) -> Result<(), anyhow::Error> {
+    pub async fn upsert(&self, id: &str, channel: Document) {
         let update_options = mongodb::options::UpdateOptions::builder()
             .upsert(true)
             .build();
 
         self.collection
             .update_one(doc! {"_id": id}, doc! {"$set": channel}, update_options)
-            .await?;
-
-        Ok(())
+            .await;
     }
 }

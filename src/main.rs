@@ -13,6 +13,7 @@ use crate::scraper::channel_scraper::ChannelScraper;
 
 mod commands;
 mod crawler;
+mod models;
 mod repos;
 mod scraper;
 mod services;

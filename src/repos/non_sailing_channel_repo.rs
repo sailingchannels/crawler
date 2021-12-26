@@ -1,4 +1,4 @@
-use mongodb::bson::{doc, Document};
+use mongodb::bson::{doc, DateTime, Document};
 use mongodb::{Client, Collection};
 
 pub struct NonSailingChannelRepository {
@@ -15,15 +15,17 @@ impl NonSailingChannelRepository {
         }
     }
 
-    pub async fn upsert(&self, id: String, view: Document) -> Result<(), anyhow::Error> {
+    pub async fn upsert(&self, channel_id: &str) {
         let update_options = mongodb::options::UpdateOptions::builder()
             .upsert(true)
             .build();
 
         self.collection
-            .update_one(doc! {"_id": id}, doc! {"$set": view}, update_options)
-            .await?;
-
-        Ok(())
+            .update_one(
+                doc! {"_id": channel_id},
+                doc! {"$set": {"_id": channel_id, "decisionMadeAt": DateTime::now()}},
+                update_options,
+            )
+            .await;
     }
 }
