@@ -4,16 +4,17 @@ use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 use tokio::time::sleep;
 
+use crate::commands::crawl_channel_command::CrawlChannelCommand;
 use crate::repos::additional_channel_repo::AdditionalChannelRepository;
 
 pub struct AdditionalChannelCrawler {
-    sender: Sender<String>,
+    sender: Sender<CrawlChannelCommand>,
     additional_channel_repo: AdditionalChannelRepository,
 }
 
 impl AdditionalChannelCrawler {
     pub fn new(
-        sender: Sender<String>,
+        sender: Sender<CrawlChannelCommand>,
         additional_channel_repo: AdditionalChannelRepository,
     ) -> AdditionalChannelCrawler {
         AdditionalChannelCrawler {
@@ -36,7 +37,13 @@ impl AdditionalChannelCrawler {
                 let channel_id = additional_channel.get_str("_id")?.to_string();
 
                 info!("Send additional channel for crawling: {}", channel_id);
-                self.sender.send(channel_id).await?;
+
+                let cmd = CrawlChannelCommand {
+                    channel_id,
+                    ignore_sailing_terms: false,
+                };
+
+                self.sender.send(cmd).await?;
             }
 
             info!(

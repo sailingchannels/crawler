@@ -7,9 +7,11 @@ use std::env;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::{self, JoinHandle};
 
+use crate::commands::crawl_channel_command::CrawlChannelCommand;
 use crate::repos::channel_repo::ChannelRepository;
 use crate::scraper::channel_scraper::ChannelScraper;
 
+mod commands;
 mod crawler;
 mod repos;
 mod scraper;
@@ -25,22 +27,16 @@ pub async fn main() -> Result<(), anyhow::Error> {
     info!("Start connection to mongodb");
 
     let opts = ClientOptions::parse(connection_string).await?;
-    let mongo_client = Client::with_options(opts)?;
+    let db_client = Client::with_options(opts)?;
 
     info!("Connected to mongodb");
 
     let mut tasks = vec![];
 
-    let (channel_scraper_tx, channel_scraper_rx): (Sender<String>, Receiver<String>) =
-        channel(usize::MAX >> 3);
+    let (channel_scraper_tx, channel_scraper_rx) = channel::<CrawlChannelCommand>(usize::MAX >> 3);
 
-    register_additional_channel_crawler(
-        &mut tasks,
-        mongo_client.clone(),
-        channel_scraper_tx.clone(),
-    );
-
-    register_channel_scraper(&mut tasks, mongo_client.clone(), channel_scraper_rx);
+    register_additional_channel_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
+    register_channel_scraper(&mut tasks, db_client.clone(), channel_scraper_rx);
 
     await_all(tasks).await;
 
@@ -56,14 +52,14 @@ async fn await_all(tasks: Vec<JoinHandle<()>>) {
 fn register_additional_channel_crawler(
     tasks: &mut Vec<JoinHandle<()>>,
     mongo_client: Client,
-    tx: Sender<String>,
+    tx: Sender<CrawlChannelCommand>,
 ) {
     let additional_channel_crawling_task = task::spawn(async move {
         let additional_channel_repo = AdditionalChannelRepository::new(&mongo_client);
-        let additional_channel_crawler = AdditionalChannelCrawler::new(tx, additional_channel_repo);
+        let crawler = AdditionalChannelCrawler::new(tx, additional_channel_repo);
 
         info!("Start additional channel crawling");
-        additional_channel_crawler.crawl().await.unwrap();
+        crawler.crawl().await.unwrap();
     });
 
     tasks.push(additional_channel_crawling_task);
@@ -72,16 +68,19 @@ fn register_additional_channel_crawler(
 fn register_channel_scraper(
     tasks: &mut Vec<JoinHandle<()>>,
     mongo_client: Client,
-    mut rx: Receiver<String>,
+    mut rx: Receiver<CrawlChannelCommand>,
 ) {
     let channel_scraper_task = task::spawn(async move {
         info!("Start channel scrape listener");
 
         let channel_repo = ChannelRepository::new(&mongo_client);
-        let channel_scraper = ChannelScraper::new(channel_repo);
+        let scraper = ChannelScraper::new(channel_repo);
 
-        while let Some(channel_id) = rx.recv().await {
-            channel_scraper.scrape(channel_id).await.unwrap();
+        while let Some(cmd) = rx.recv().await {
+            scraper
+                .scrape(cmd.channel_id, cmd.ignore_sailing_terms)
+                .await
+                .unwrap();
         }
     });
 

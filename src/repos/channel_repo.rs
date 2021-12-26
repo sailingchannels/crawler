@@ -31,7 +31,7 @@ impl ChannelRepository {
         Ok(channel_ids)
     }
 
-    pub async fn get_last_crawl_date(&self, id: String) -> Result<DateTime, Error> {
+    pub async fn get_last_crawl_date(&self, id: &str) -> Result<DateTime, Error> {
         let find_one_options = FindOneOptions::builder()
             .projection(doc! {"lastCrawl": 1})
             .build();
