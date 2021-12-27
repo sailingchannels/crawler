@@ -3,16 +3,16 @@ use futures::stream::TryStreamExt;
 use mongodb::bson::{doc, Document};
 use mongodb::{Client, Collection};
 
-pub struct BlacklistRepository {
+pub struct SailingTermRepository {
     collection: Collection<Document>,
 }
 
-impl BlacklistRepository {
-    pub fn new(client: &Client) -> BlacklistRepository {
+impl SailingTermRepository {
+    pub fn new(client: &Client) -> SailingTermRepository {
         let db = client.database("sailing-channels");
-        let feeds = db.collection::<Document>("additional");
+        let feeds = db.collection::<Document>("sailingterms");
 
-        BlacklistRepository { collection: feeds }
+        SailingTermRepository { collection: feeds }
     }
 
     pub async fn get_all(&self) -> Result<Vec<String>, Error> {

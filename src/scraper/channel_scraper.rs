@@ -1,5 +1,5 @@
 use anyhow::Error;
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use log::info;
 use mongodb::bson::doc;
 
@@ -79,17 +79,33 @@ impl ChannelScraper {
             None => 0,
         };
 
+        let published_date = DateTime::parse_from_str(
+            &statistics_result.snippet.published_at,
+            "%Y-%m-%dT%H:%M:%S%z",
+        )?;
+
         let mut channel = doc! {
             "id": channel_id.to_string(),
             "title": statistics_result.snippet.title.to_string(),
             "description": statistics_result.snippet.description.to_string(),
-            "publishedAt": calendar.timegm(pd.utctimetuple()),
+            "publishedAt": mongodb::bson::DateTime::from_millis(
+                published_date.timestamp_millis(),
+            ),
             "thumbnail": statistics_result.snippet.thumbnails.default.url.to_string(),
             "subscribers": subscriber_count,
-            "views": int(stats["viewCount"]),
-            "subscribersHidden": bool(stats["hiddenSubscriberCount"]),
-            "lastCrawl": datetime.now()
+            "views": statistics_result.statistics.view_count.parse::<i64>()?,
+            "subscribersHidden": statistics_result.statistics.hidden_subscriber_count,
+            "lastCrawl": mongodb::bson::DateTime::now(),
         };
+
+        let keywords = statistics_result
+            .branding_settings
+            .channel
+            .keywords
+            .split(" ")
+            .collect::<Vec<&str>>();
+
+        channel.insert("keywords", keywords);
 
         Ok(())
     }
@@ -143,7 +159,7 @@ impl ChannelScraper {
             .contains(&channel_id.to_string())
         {
             has_sailing_term = false;
-            self.channel_repo.delete(&channel_id).await;
+            self.channel_repo.delete(&channel_id).await.unwrap();
         }
 
         has_sailing_term

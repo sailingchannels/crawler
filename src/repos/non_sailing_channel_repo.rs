@@ -26,6 +26,7 @@ impl NonSailingChannelRepository {
                 doc! {"$set": {"_id": channel_id, "decisionMadeAt": DateTime::now()}},
                 update_options,
             )
-            .await;
+            .await
+            .unwrap();
     }
 }

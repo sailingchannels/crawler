@@ -2,13 +2,17 @@ use crawler::additional_channel_crawler::AdditionalChannelCrawler;
 use log::{info, LevelFilter};
 use mongodb::{options::ClientOptions, Client};
 use repos::additional_channel_repo::AdditionalChannelRepository;
+use repos::blacklist_repo::BlacklistRepository;
+use repos::sailing_term_repo::SailingTermRepository;
 use simple_logger::SimpleLogger;
 use std::env;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::{self, JoinHandle};
 
 use crate::commands::crawl_channel_command::CrawlChannelCommand;
+use crate::crawler::channel_update_crawler::ChannelUpdateCrawler;
 use crate::repos::channel_repo::ChannelRepository;
+use crate::repos::non_sailing_channel_repo::NonSailingChannelRepository;
 use crate::scraper::channel_scraper::ChannelScraper;
 
 mod commands;
@@ -17,6 +21,7 @@ mod models;
 mod repos;
 mod scraper;
 mod services;
+mod utils;
 
 #[tokio::main]
 pub async fn main() -> Result<(), anyhow::Error> {
@@ -37,6 +42,8 @@ pub async fn main() -> Result<(), anyhow::Error> {
     let (channel_scraper_tx, channel_scraper_rx) = channel::<CrawlChannelCommand>(usize::MAX >> 3);
 
     register_additional_channel_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
+    register_channel_update_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
+
     register_channel_scraper(&mut tasks, db_client.clone(), channel_scraper_rx);
 
     await_all(tasks).await;
@@ -66,6 +73,22 @@ fn register_additional_channel_crawler(
     tasks.push(additional_channel_crawling_task);
 }
 
+fn register_channel_update_crawler(
+    tasks: &mut Vec<JoinHandle<()>>,
+    mongo_client: Client,
+    tx: Sender<CrawlChannelCommand>,
+) {
+    let channel_update_crawling_task = task::spawn(async move {
+        let channel_repo = ChannelRepository::new(&mongo_client);
+        let crawler = ChannelUpdateCrawler::new(tx, channel_repo);
+
+        info!("Start channel update crawling");
+        crawler.crawl().await.unwrap();
+    });
+
+    tasks.push(channel_update_crawling_task);
+}
+
 fn register_channel_scraper(
     tasks: &mut Vec<JoinHandle<()>>,
     mongo_client: Client,
@@ -75,7 +98,17 @@ fn register_channel_scraper(
         info!("Start channel scrape listener");
 
         let channel_repo = ChannelRepository::new(&mongo_client);
-        let scraper = ChannelScraper::new(channel_repo);
+        let non_sailing_channel_repo = NonSailingChannelRepository::new(&mongo_client);
+
+        let sailing_terms = get_sailing_terms(&mongo_client).await;
+        let blacklisted_channel_ids = get_blacklisted_channels(&mongo_client).await;
+
+        let scraper = ChannelScraper::new(
+            channel_repo,
+            non_sailing_channel_repo,
+            sailing_terms,
+            blacklisted_channel_ids,
+        );
 
         while let Some(cmd) = rx.recv().await {
             scraper
@@ -86,4 +119,18 @@ fn register_channel_scraper(
     });
 
     tasks.push(channel_scraper_task);
+}
+
+async fn get_sailing_terms(mongo_client: &Client) -> Vec<String> {
+    let sailing_term_repo = SailingTermRepository::new(&mongo_client);
+    let sailing_terms = sailing_term_repo.get_all().await.unwrap();
+
+    sailing_terms
+}
+
+async fn get_blacklisted_channels(mongo_client: &Client) -> Vec<String> {
+    let blacklist_repo = BlacklistRepository::new(&mongo_client);
+    let blacklisted_channels = blacklist_repo.get_all().await.unwrap();
+
+    blacklisted_channels
 }

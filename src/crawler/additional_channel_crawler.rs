@@ -35,12 +35,13 @@ impl AdditionalChannelCrawler {
 
             for additional_channel in additional_channels {
                 let channel_id = additional_channel.get_str("_id")?.to_string();
+                let ignore_sailing_terms = additional_channel.get_bool("ignoreSailingTerm")?;
 
                 info!("Send additional channel for crawling: {}", channel_id);
 
                 let cmd = CrawlChannelCommand {
                     channel_id,
-                    ignore_sailing_terms: false,
+                    ignore_sailing_terms,
                 };
 
                 self.sender.send(cmd).await?;

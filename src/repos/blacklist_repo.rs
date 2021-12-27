@@ -10,7 +10,7 @@ pub struct BlacklistRepository {
 impl BlacklistRepository {
     pub fn new(client: &Client) -> BlacklistRepository {
         let db = client.database("sailing-channels");
-        let feeds = db.collection::<Document>("additional");
+        let feeds = db.collection::<Document>("blacklist");
 
         BlacklistRepository { collection: feeds }
     }
