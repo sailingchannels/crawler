@@ -7,7 +7,7 @@ use crate::{
     repos::{
         channel_repo::ChannelRepository, non_sailing_channel_repo::NonSailingChannelRepository,
     },
-    services::youtube_service::YoutubeService,
+    services::{detect_language_service::DetectLanguageService, youtube_service::YoutubeService},
     utils::keyword_utils,
 };
 
@@ -17,6 +17,7 @@ pub struct ChannelScraper {
     channel_repo: ChannelRepository,
     non_sailing_channel_repo: NonSailingChannelRepository,
     youtube_service: YoutubeService,
+    detect_language_service: DetectLanguageService,
     sailing_terms: Vec<String>,
     blacklisted_channel_ids: Vec<String>,
 }
@@ -33,6 +34,7 @@ impl ChannelScraper {
             channel_repo,
             non_sailing_channel_repo,
             youtube_service: YoutubeService::new(youtube_api_keys),
+            detect_language_service: DetectLanguageService::new(vec![]),
             sailing_terms,
             blacklisted_channel_ids,
         }
@@ -91,7 +93,7 @@ impl ChannelScraper {
         let mut channel = doc! {
             "id": channel_id.to_string(),
             "title": channel_details.snippet.title.to_string(),
-            "description": description,
+            "description": description.to_string(),
             "publishedAt": mongodb::bson::DateTime::from_millis(
                 published_date.timestamp_millis(),
             ),
@@ -120,6 +122,8 @@ impl ChannelScraper {
         if keywords.len() > 0 {
             channel.insert("keywords", keywords);
         }
+
+        let language = self.detect_language(&channel_id, &description).await;
 
         println!("{:?}", channel);
 
@@ -179,5 +183,17 @@ impl ChannelScraper {
         }
 
         has_sailing_term
+    }
+
+    async fn detected_language(&self, channel_id: &str, description: &str) -> String {
+        let channel_language = self.channel_repo.get_detected_language(channel_id).await;
+
+        let has_language = match channel_language {
+            Ok(channel_language) => true,
+            Err(_) => false,
+        };
+
+        let language = "en";
+        language.to_string()
     }
 }

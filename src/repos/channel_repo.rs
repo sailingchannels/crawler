@@ -47,7 +47,7 @@ impl ChannelRepository {
         Ok(last_crawl.clone())
     }
 
-    pub async fn get_detected_language(&self, id: String) -> Result<String, Error> {
+    pub async fn get_detected_language(&self, id: &str) -> Result<String, Error> {
         let find_one_options = FindOneOptions::builder()
             .projection(doc! {"detectedLanguage": 1})
             .build();
