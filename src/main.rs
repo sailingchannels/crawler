@@ -12,7 +12,6 @@ use simple_logger::SimpleLogger;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::{self, JoinHandle};
 
-use crate::crawler::channel_update_crawler::ChannelUpdateCrawler;
 use crate::models::config::Config;
 use crate::repos::channel_repo::ChannelRepository;
 use crate::repos::non_sailing_channel_repo::NonSailingChannelRepository;
@@ -20,6 +19,9 @@ use crate::scraper::channel_scraper::ChannelScraper;
 use crate::{
     commands::crawl_channel_command::CrawlChannelCommand,
     repos::{subscriber_repo::SubscriberRepository, view_repo::ViewRepository},
+};
+use crate::{
+    crawler::channel_update_crawler::ChannelUpdateCrawler, repos::video_repo::VideoRepository,
 };
 
 mod commands;
@@ -118,6 +120,7 @@ fn register_channel_scraper(
         let non_sailing_channel_repo = NonSailingChannelRepository::new(&mongo_client);
         let view_repo = ViewRepository::new(&mongo_client);
         let subscriber_repo = SubscriberRepository::new(&mongo_client);
+        let video_repo = VideoRepository::new(&mongo_client);
 
         let sailing_terms = get_sailing_terms(&mongo_client).await;
         let blacklisted_channel_ids = get_blacklisted_channels(&mongo_client).await;
@@ -126,6 +129,7 @@ fn register_channel_scraper(
             channel_repo,
             view_repo,
             subscriber_repo,
+            video_repo,
             non_sailing_channel_repo,
             sailing_terms,
             blacklisted_channel_ids,

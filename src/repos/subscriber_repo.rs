@@ -15,7 +15,7 @@ impl SubscriberRepository {
         }
     }
 
-    pub async fn delete_by_channel(&self, channel_id: String) -> Result<(), anyhow::Error> {
+    pub async fn delete_by_channel(&self, channel_id: &str) -> Result<(), anyhow::Error> {
         self.collection
             .delete_many(doc! {"_id": {"channel": channel_id}}, None)
             .await?;

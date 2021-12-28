@@ -8,7 +8,8 @@ const DEVELOPMENT: &str = "development";
 use crate::{
     repos::{
         channel_repo::ChannelRepository, non_sailing_channel_repo::NonSailingChannelRepository,
-        subscriber_repo::SubscriberRepository, view_repo::ViewRepository,
+        subscriber_repo::SubscriberRepository, video_repo::VideoRepository,
+        view_repo::ViewRepository,
     },
     services::{detect_language_service::DetectLanguageService, youtube_service::YoutubeService},
     utils::keyword_utils,
@@ -20,6 +21,7 @@ pub struct ChannelScraper {
     channel_repo: ChannelRepository,
     view_repo: ViewRepository,
     subscriber_repo: SubscriberRepository,
+    video_repo: VideoRepository,
     non_sailing_channel_repo: NonSailingChannelRepository,
     youtube_service: YoutubeService,
     detect_language_service: DetectLanguageService,
@@ -33,6 +35,7 @@ impl ChannelScraper {
         channel_repo: ChannelRepository,
         view_repo: ViewRepository,
         subscriber_repo: SubscriberRepository,
+        video_repo: VideoRepository,
         non_sailing_channel_repo: NonSailingChannelRepository,
         sailing_terms: Vec<String>,
         blacklisted_channel_ids: Vec<String>,
@@ -44,6 +47,7 @@ impl ChannelScraper {
             channel_repo,
             view_repo,
             subscriber_repo,
+            video_repo,
             non_sailing_channel_repo,
             youtube_service: YoutubeService::new(youtube_api_keys),
             detect_language_service: DetectLanguageService::new(detect_language_api_keys),
@@ -207,10 +211,19 @@ impl ChannelScraper {
             .contains(&channel_id.to_string())
         {
             has_sailing_term = false;
-            self.channel_repo.delete(&channel_id).await.unwrap();
+            self.delete_channel(channel_id).await.unwrap();
         }
 
         has_sailing_term
+    }
+
+    async fn delete_channel(&self, channel_id: &str) -> Result<(), Error> {
+        self.channel_repo.delete(channel_id).await?;
+        self.view_repo.delete_by_channel(channel_id).await?;
+        self.subscriber_repo.delete_by_channel(channel_id).await?;
+        self.video_repo.delete_by_channel(channel_id).await?;
+
+        Ok(())
     }
 
     async fn detect_language(&self, channel_id: &str, description: &str) -> Option<String> {
