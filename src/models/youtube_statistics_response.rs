@@ -31,12 +31,12 @@ pub struct YoutubeStatisticsItem {
 #[serde(rename_all = "camelCase")]
 pub struct Snippet {
     pub title: String,
-    pub description: String,
-    pub custom_url: String,
+    pub description: Option<String>,
+    pub custom_url: Option<String>,
     pub published_at: String,
     pub thumbnails: Thumbnails,
     pub localized: Localized,
-    pub country: String,
+    pub country: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -75,7 +75,7 @@ pub struct High {
 #[serde(rename_all = "camelCase")]
 pub struct Localized {
     pub title: String,
-    pub description: String,
+    pub description: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -91,19 +91,19 @@ pub struct Statistics {
 #[serde(rename_all = "camelCase")]
 pub struct BrandingSettings {
     pub channel: Channel,
-    pub image: Image,
+    pub image: Option<Image>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Channel {
     pub title: String,
-    pub description: String,
-    pub keywords: String,
-    pub tracking_analytics_account_id: String,
-    pub moderate_comments: bool,
-    pub unsubscribed_trailer: String,
-    pub country: String,
+    pub description: Option<String>,
+    pub keywords: Option<String>,
+    pub tracking_analytics_account_id: Option<String>,
+    pub moderate_comments: Option<bool>,
+    pub unsubscribed_trailer: Option<String>,
+    pub country: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

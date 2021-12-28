@@ -1,6 +1,6 @@
 use anyhow::Error;
 use chrono::{DateTime, Duration, Utc};
-use log::info;
+use log::{debug, info};
 use mongodb::bson::doc;
 
 use crate::{
@@ -8,6 +8,7 @@ use crate::{
         channel_repo::ChannelRepository, non_sailing_channel_repo::NonSailingChannelRepository,
     },
     services::youtube_service::YoutubeService,
+    utils::keyword_utils,
 };
 
 const ONE_DAY_IN_SECONDS: i64 = 86400;
@@ -26,11 +27,12 @@ impl ChannelScraper {
         non_sailing_channel_repo: NonSailingChannelRepository,
         sailing_terms: Vec<String>,
         blacklisted_channel_ids: Vec<String>,
+        youtube_api_keys: Vec<String>,
     ) -> ChannelScraper {
         ChannelScraper {
             channel_repo,
             non_sailing_channel_repo,
-            youtube_service: YoutubeService::new(),
+            youtube_service: YoutubeService::new(youtube_api_keys),
             sailing_terms,
             blacklisted_channel_ids,
         }
@@ -53,59 +55,73 @@ impl ChannelScraper {
 
         info!("Start scraping channel {}", channel_id);
 
-        let statistics_result = self
+        let channel_details = self
             .youtube_service
-            .get_statistics(&channel_id)
-            .await
-            .expect("Error getting statistics");
+            .get_channel_details(&channel_id)
+            .await?;
+
+        let description = channel_details.snippet.description.unwrap_or_default();
 
         let has_sailing_term = self
             .has_sailing_term(
                 &channel_id,
-                &statistics_result.snippet.title,
-                &statistics_result.snippet.description,
+                &channel_details.snippet.title,
+                &description,
                 ignore_sailing_terms,
             )
             .await;
 
-        if has_sailing_term == false
-            || statistics_result.statistics.video_count.parse::<i32>()? == 0
-        {
+        let view_count = channel_details
+            .statistics
+            .view_count
+            .parse::<i64>()
+            .unwrap_or(0);
+
+        if has_sailing_term == false || view_count == 0 {
             return Ok(());
         }
 
-        let subscriber_count = match statistics_result.statistics.subscriber_count {
+        let subscriber_count = match channel_details.statistics.subscriber_count {
             Some(subscriber_count) => subscriber_count.parse::<i64>()?,
             None => 0,
         };
 
-        let published_date = DateTime::parse_from_str(
-            &statistics_result.snippet.published_at,
-            "%Y-%m-%dT%H:%M:%S%z",
-        )?;
+        let published_date = DateTime::parse_from_rfc3339(&channel_details.snippet.published_at)?;
 
         let mut channel = doc! {
             "id": channel_id.to_string(),
-            "title": statistics_result.snippet.title.to_string(),
-            "description": statistics_result.snippet.description.to_string(),
+            "title": channel_details.snippet.title.to_string(),
+            "description": description,
             "publishedAt": mongodb::bson::DateTime::from_millis(
                 published_date.timestamp_millis(),
             ),
-            "thumbnail": statistics_result.snippet.thumbnails.default.url.to_string(),
+            "thumbnail": channel_details.snippet.thumbnails.default.url.to_string(),
             "subscribers": subscriber_count,
-            "views": statistics_result.statistics.view_count.parse::<i64>()?,
-            "subscribersHidden": statistics_result.statistics.hidden_subscriber_count,
+            "views": view_count,
+            "subscribersHidden": channel_details.statistics.hidden_subscriber_count,
             "lastCrawl": mongodb::bson::DateTime::now(),
         };
 
-        let keywords = statistics_result
-            .branding_settings
-            .channel
-            .keywords
-            .split(" ")
-            .collect::<Vec<&str>>();
+        if channel_details.snippet.country.is_some() {
+            channel.insert(
+                "country",
+                channel_details.snippet.country.unwrap().to_lowercase(),
+            );
+        }
 
-        channel.insert("keywords", keywords);
+        let keywords = keyword_utils::parse_keywords(
+            &channel_details
+                .branding_settings
+                .channel
+                .keywords
+                .unwrap_or_default(),
+        );
+
+        if keywords.len() > 0 {
+            channel.insert("keywords", keywords);
+        }
+
+        println!("{:?}", channel);
 
         Ok(())
     }

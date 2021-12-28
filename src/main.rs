@@ -1,16 +1,20 @@
 use crawler::additional_channel_crawler::AdditionalChannelCrawler;
-use log::{info, LevelFilter};
+use figment::{
+    providers::{Env, Format, Json},
+    Figment,
+};
+use log::{debug, info, LevelFilter};
 use mongodb::{options::ClientOptions, Client};
 use repos::additional_channel_repo::AdditionalChannelRepository;
 use repos::blacklist_repo::BlacklistRepository;
 use repos::sailing_term_repo::SailingTermRepository;
 use simple_logger::SimpleLogger;
-use std::env;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::{self, JoinHandle};
 
 use crate::commands::crawl_channel_command::CrawlChannelCommand;
 use crate::crawler::channel_update_crawler::ChannelUpdateCrawler;
+use crate::models::config::Config;
 use crate::repos::channel_repo::ChannelRepository;
 use crate::repos::non_sailing_channel_repo::NonSailingChannelRepository;
 use crate::scraper::channel_scraper::ChannelScraper;
@@ -27,12 +31,16 @@ mod utils;
 pub async fn main() -> Result<(), anyhow::Error> {
     SimpleLogger::new().with_level(LevelFilter::Info).init()?;
 
-    let mongodb_default_conn = "mongodb://localhost:27017".to_string();
-    let connection_string = env::var("MONGO_CONNECTION_STRING").unwrap_or(mongodb_default_conn);
+    let config: Config = Figment::new()
+        .merge(Json::file("config.json"))
+        .merge(Env::raw().only(&["MONGO_CONNECTION_STRING"]))
+        .extract()?;
+
+    debug!("{:?}", config);
 
     info!("Start connection to mongodb");
 
-    let opts = ClientOptions::parse(connection_string).await?;
+    let opts = ClientOptions::parse(&config.mongo_connection_string).await?;
     let db_client = Client::with_options(opts)?;
 
     info!("Connected to mongodb");
@@ -44,7 +52,12 @@ pub async fn main() -> Result<(), anyhow::Error> {
     register_additional_channel_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
     register_channel_update_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
 
-    register_channel_scraper(&mut tasks, db_client.clone(), channel_scraper_rx);
+    register_channel_scraper(
+        &mut tasks,
+        db_client.clone(),
+        config.clone(),
+        channel_scraper_rx,
+    );
 
     await_all(tasks).await;
 
@@ -92,6 +105,7 @@ fn register_channel_update_crawler(
 fn register_channel_scraper(
     tasks: &mut Vec<JoinHandle<()>>,
     mongo_client: Client,
+    config: Config,
     mut rx: Receiver<CrawlChannelCommand>,
 ) {
     let channel_scraper_task = task::spawn(async move {
@@ -108,6 +122,7 @@ fn register_channel_scraper(
             non_sailing_channel_repo,
             sailing_terms,
             blacklisted_channel_ids,
+            config.youtube_api_keys,
         );
 
         while let Some(cmd) = rx.recv().await {

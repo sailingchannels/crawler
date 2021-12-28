@@ -76,6 +76,7 @@ impl ChannelRepository {
 
         self.collection
             .update_one(doc! {"_id": id}, doc! {"$set": channel}, update_options)
-            .await;
+            .await
+            .unwrap();
     }
 }

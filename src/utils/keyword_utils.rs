@@ -6,8 +6,15 @@ pub fn parse_keywords(keyword_str: &str) -> Vec<String> {
 
     result
         .into_iter()
-        .map(|cap| cap[0].to_string())
+        .map(|cap| sanitize_keyword(&cap[0]))
         .collect::<Vec<String>>()
+}
+
+fn sanitize_keyword(keyword: &str) -> String {
+    let keyword = keyword.replace("\"", "");
+    let keyword = keyword.replace("\\", "");
+
+    keyword.to_string()
 }
 
 #[cfg(test)]
