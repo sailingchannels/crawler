@@ -23,7 +23,7 @@ impl SubscriberRepository {
         Ok(())
     }
 
-    pub async fn upsert(&self, id: String, view: Document) -> Result<(), anyhow::Error> {
+    pub async fn upsert(&self, id: Document, view: Document) -> Result<(), anyhow::Error> {
         let update_options = mongodb::options::UpdateOptions::builder()
             .upsert(true)
             .build();

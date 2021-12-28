@@ -1,11 +1,14 @@
 use anyhow::Error;
-use chrono::{DateTime, Duration, Utc};
-use log::{debug, info};
+use chrono::{DateTime, Datelike, Duration, Utc};
+use log::info;
 use mongodb::bson::doc;
+
+const DEVELOPMENT: &str = "development";
 
 use crate::{
     repos::{
         channel_repo::ChannelRepository, non_sailing_channel_repo::NonSailingChannelRepository,
+        subscriber_repo::SubscriberRepository, view_repo::ViewRepository,
     },
     services::{detect_language_service::DetectLanguageService, youtube_service::YoutubeService},
     utils::keyword_utils,
@@ -15,28 +18,38 @@ const ONE_DAY_IN_SECONDS: i64 = 86400;
 
 pub struct ChannelScraper {
     channel_repo: ChannelRepository,
+    view_repo: ViewRepository,
+    subscriber_repo: SubscriberRepository,
     non_sailing_channel_repo: NonSailingChannelRepository,
     youtube_service: YoutubeService,
     detect_language_service: DetectLanguageService,
     sailing_terms: Vec<String>,
     blacklisted_channel_ids: Vec<String>,
+    environment: String,
 }
 
 impl ChannelScraper {
     pub fn new(
         channel_repo: ChannelRepository,
+        view_repo: ViewRepository,
+        subscriber_repo: SubscriberRepository,
         non_sailing_channel_repo: NonSailingChannelRepository,
         sailing_terms: Vec<String>,
         blacklisted_channel_ids: Vec<String>,
         youtube_api_keys: Vec<String>,
+        detect_language_api_keys: Vec<String>,
+        environment: String,
     ) -> ChannelScraper {
         ChannelScraper {
             channel_repo,
+            view_repo,
+            subscriber_repo,
             non_sailing_channel_repo,
             youtube_service: YoutubeService::new(youtube_api_keys),
-            detect_language_service: DetectLanguageService::new(vec![]),
+            detect_language_service: DetectLanguageService::new(detect_language_api_keys),
             sailing_terms,
             blacklisted_channel_ids,
+            environment,
         }
     }
 
@@ -123,9 +136,24 @@ impl ChannelScraper {
             channel.insert("keywords", keywords);
         }
 
-        let language = self.detect_language(&channel_id, &description).await;
+        let language_option = self.detect_language(&channel_id, &description).await;
+        match language_option {
+            Some(language) => {
+                channel.insert("language", language);
+                channel.insert("detectedLanguage", true);
+            }
+            None => {}
+        }
 
-        println!("{:?}", channel);
+        self.store_view_count(&channel_id, view_count).await;
+        self.store_subscriber_count(&channel_id, subscriber_count)
+            .await;
+
+        if self.environment.eq(DEVELOPMENT) {
+            println!("{:?}", channel);
+        } else {
+            self.channel_repo.upsert(&channel_id, channel).await;
+        }
 
         Ok(())
     }
@@ -185,15 +213,66 @@ impl ChannelScraper {
         has_sailing_term
     }
 
-    async fn detected_language(&self, channel_id: &str, description: &str) -> String {
-        let channel_language = self.channel_repo.get_detected_language(channel_id).await;
+    async fn detect_language(&self, channel_id: &str, description: &str) -> Option<String> {
+        let channel_language_result = self.channel_repo.get_detected_language(channel_id).await;
 
-        let has_language = match channel_language {
-            Ok(channel_language) => true,
-            Err(_) => false,
-        };
+        let language_detected = channel_language_result.is_ok();
 
-        let language = "en";
-        language.to_string()
+        if language_detected == false && self.environment.eq(DEVELOPMENT) {
+            let detected_language = self
+                .detect_language_service
+                .detect_language(description)
+                .await;
+
+            detected_language
+        } else {
+            None
+        }
+    }
+
+    async fn store_view_count(&self, channel_id: &str, view_count: i64) {
+        let now = Utc::now();
+
+        self.view_repo
+            .upsert(
+                doc! {
+                    "channel": channel_id.to_string(),
+                    "date": now.format("%Y%m%d").to_string().parse::<i32>().unwrap(),
+                },
+                doc! {
+                    "year": now.year(),
+                    "month": now.month(),
+                    "day": now.day(),
+                    "date": mongodb::bson::DateTime::from_millis(
+                        now.timestamp_millis() as i64
+                    ),
+                    "views": view_count
+                },
+            )
+            .await
+            .expect("Failed to upsert view count");
+    }
+
+    async fn store_subscriber_count(&self, channel_id: &str, subscriber_count: i64) {
+        let now = Utc::now();
+
+        self.subscriber_repo
+            .upsert(
+                doc! {
+                    "channel": channel_id.to_string(),
+                    "date": now.format("%Y%m%d").to_string().parse::<i32>().unwrap(),
+                },
+                doc! {
+                    "year": now.year(),
+                    "month": now.month(),
+                    "day": now.day(),
+                    "date": mongodb::bson::DateTime::from_millis(
+                        now.timestamp_millis() as i64
+                    ),
+                    "subscribers": subscriber_count
+                },
+            )
+            .await
+            .expect("Failed to upsert view count");
     }
 }
