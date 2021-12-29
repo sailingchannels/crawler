@@ -12,17 +12,17 @@ use simple_logger::SimpleLogger;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::{self, JoinHandle};
 
-use crate::models::config::Config;
-use crate::repos::channel_repo::ChannelRepository;
 use crate::repos::non_sailing_channel_repo::NonSailingChannelRepository;
 use crate::scraper::channel_scraper::ChannelScraper;
 use crate::{
     commands::crawl_channel_command::CrawlChannelCommand,
     repos::{subscriber_repo::SubscriberRepository, view_repo::ViewRepository},
 };
+use crate::{commands::crawl_videos_command::CrawlVideosCommand, models::config::Config};
 use crate::{
     crawler::channel_update_crawler::ChannelUpdateCrawler, repos::video_repo::VideoRepository,
 };
+use crate::{crawler::new_video_crawler::NewVideoCrawler, repos::channel_repo::ChannelRepository};
 
 mod commands;
 mod crawler;
@@ -53,9 +53,11 @@ pub async fn main() -> Result<(), anyhow::Error> {
     let mut tasks = vec![];
 
     let (channel_scraper_tx, channel_scraper_rx) = channel::<CrawlChannelCommand>(usize::MAX >> 3);
+    let (video_scraper_tx, video_scraper_rx) = channel::<CrawlVideosCommand>(usize::MAX >> 3);
 
     register_additional_channel_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
     register_channel_update_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
+    register_new_video_crawler(&mut tasks, db_client.clone(), video_scraper_tx.clone());
 
     register_channel_scraper(
         &mut tasks,
@@ -105,6 +107,22 @@ fn register_channel_update_crawler(
     });
 
     tasks.push(channel_update_crawling_task);
+}
+
+fn register_new_video_crawler(
+    tasks: &mut Vec<JoinHandle<()>>,
+    mongo_client: Client,
+    tx: Sender<CrawlVideosCommand>,
+) {
+    let new_video_crawling_task = task::spawn(async move {
+        let channel_repo = ChannelRepository::new(&mongo_client);
+        let crawler = NewVideoCrawler::new(tx, channel_repo);
+
+        info!("Start new video crawling");
+        crawler.crawl().await.unwrap();
+    });
+
+    tasks.push(new_video_crawling_task);
 }
 
 fn register_channel_scraper(
