@@ -12,7 +12,7 @@ use crate::{
         subscriber_repo::SubscriberRepository, video_repo::VideoRepository,
         view_repo::ViewRepository,
     },
-    services::{detect_language_service::DetectLanguageService, youtube_service::YoutubeService},
+    services::youtube_service::YoutubeService,
     utils::keyword_utils,
 };
 
@@ -25,7 +25,6 @@ pub struct ChannelScraper {
     video_repo: VideoRepository,
     non_sailing_channel_repo: NonSailingChannelRepository,
     youtube_service: YoutubeService,
-    detect_language_service: DetectLanguageService,
     sailing_terms: Vec<String>,
     blacklisted_channel_ids: Vec<String>,
     environment: String,
@@ -41,7 +40,6 @@ impl ChannelScraper {
         sailing_terms: Vec<String>,
         blacklisted_channel_ids: Vec<String>,
         youtube_api_keys: Vec<String>,
-        detect_language_api_keys: Vec<String>,
         environment: String,
     ) -> ChannelScraper {
         ChannelScraper {
@@ -51,7 +49,6 @@ impl ChannelScraper {
             video_repo,
             non_sailing_channel_repo,
             youtube_service: YoutubeService::new(youtube_api_keys),
-            detect_language_service: DetectLanguageService::new(detect_language_api_keys),
             sailing_terms,
             blacklisted_channel_ids,
             environment,

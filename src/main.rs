@@ -156,7 +156,6 @@ fn register_channel_scraper(
             sailing_terms,
             blacklisted_channel_ids,
             config.youtube_api_keys,
-            config.detect_language_api_keys,
             config.environment,
         );
 
