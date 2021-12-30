@@ -30,9 +30,7 @@ impl AdditionalChannelCrawler {
             info!("Start additional channel crawler");
             let additional_channels = self.additional_channel_repo.get_all().await?;
 
-            if additional_channels.len() == 0 {
-                info!("No additional channels to crawl");
-            }
+            info!("Found {} additional channels", additional_channels.len());
 
             for additional_channel in additional_channels {
                 let channel_id = additional_channel.get_str("_id")?.to_string();

@@ -1,5 +1,4 @@
 use anyhow::Error;
-use log::info;
 use rand::Rng;
 
 use crate::models::youtube_statistics_response::{
@@ -28,7 +27,6 @@ impl YoutubeService {
             self.get_api_key()
         );
 
-        info!("{}", url);
         let resp = reqwest::get(url)
             .await?
             .json::<YoutubeStatisticsResponse>()

@@ -1,8 +1,8 @@
 use anyhow::Error;
-use chrono::{DateTime, Datelike, Duration, Utc};
-use log::info;
+use chrono::{DateTime, Datelike, Utc};
+use log::{debug, error, info, warn};
 use mongodb::bson::doc;
-use whatlang::{detect, Lang, Script};
+use whatlang::detect;
 
 const DEVELOPMENT: &str = "development";
 
@@ -15,8 +15,6 @@ use crate::{
     services::youtube_service::YoutubeService,
     utils::keyword_utils,
 };
-
-const ONE_DAY_IN_SECONDS: i64 = 86400;
 
 pub struct ChannelScraper {
     channel_repo: ChannelRepository,
@@ -60,22 +58,21 @@ impl ChannelScraper {
         channel_id: String,
         ignore_sailing_terms: bool,
     ) -> Result<(), Error> {
-        let should_crawl = self.should_crawl_now(&channel_id).await;
-        if should_crawl == false {
-            info!(
-                "Channel {} is not crawled now, last crawl less then a day ago",
-                channel_id
-            );
-
-            return Ok(());
-        }
-
         info!("Start scraping channel {}", channel_id);
 
-        let channel_details = self
-            .youtube_service
-            .get_channel_details(&channel_id)
-            .await?;
+        let channel_details_result = self.youtube_service.get_channel_details(&channel_id).await;
+        let channel_details = match channel_details_result {
+            Ok(channel_details) => channel_details,
+            Err(err) => {
+                error!("Failed to get channel details for {}: {}", channel_id, err);
+
+                self.channel_repo
+                    .set_scrape_error(&channel_id, err.to_string())
+                    .await;
+
+                return Ok(());
+            }
+        };
 
         let description = channel_details.snippet.description.unwrap_or_default();
 
@@ -152,30 +149,12 @@ impl ChannelScraper {
             .await;
 
         if self.environment.eq(DEVELOPMENT) {
-            println!("{:?}", channel);
+            debug!("Channel {} stored", channel_id);
         } else {
             self.channel_repo.upsert(&channel_id, channel).await;
         }
 
         Ok(())
-    }
-
-    async fn should_crawl_now(&self, channel_id: &str) -> bool {
-        let last_crawl_default = Utc::now() - Duration::seconds(ONE_DAY_IN_SECONDS + 1);
-
-        let last_crawl = self
-            .channel_repo
-            .get_last_crawl_date(channel_id)
-            .await
-            .unwrap_or(mongodb::bson::DateTime::from_millis(
-                last_crawl_default.timestamp_millis(),
-            ));
-
-        let current_timestamp = Utc::now().timestamp();
-        let should_crawl =
-            current_timestamp - (last_crawl.timestamp_millis() / 1000) < ONE_DAY_IN_SECONDS;
-
-        should_crawl
     }
 
     async fn has_sailing_term(
@@ -229,11 +208,21 @@ impl ChannelScraper {
 
         let language_detected = channel_language_result.is_ok();
 
-        if language_detected == false && self.environment.eq(DEVELOPMENT) {
-            let info = detect(text).unwrap();
+        if language_detected == false && text.len() > 0 {
+            match detect(text) {
+                Some(language) => {
+                    if language.is_reliable() {
+                        return Some(language.lang().code()[..2].to_string());
+                    }
+                }
+                None => {
+                    warn!(
+                        "Language detection failed for channel {} with text {}",
+                        channel_id, text
+                    );
 
-            if info.is_reliable() {
-                return Some(info.lang().code()[..2].to_string());
+                    return None;
+                }
             }
         }
 

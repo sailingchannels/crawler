@@ -1,4 +1,5 @@
 use anyhow::Error;
+use chrono::Utc;
 use futures::stream::TryStreamExt;
 use mongodb::bson::{doc, DateTime, Document};
 use mongodb::options::{FindOneOptions, FindOptions};
@@ -31,20 +32,28 @@ impl ChannelRepository {
         Ok(channel_ids)
     }
 
-    pub async fn get_last_crawl_date(&self, id: &str) -> Result<DateTime, Error> {
-        let find_one_options = FindOneOptions::builder()
-            .projection(doc! {"lastCrawl": 1})
-            .build();
+    pub async fn get_ids_last_crawled_before(
+        &self,
+        date: chrono::DateTime<Utc>,
+    ) -> Result<Vec<String>, Error> {
+        let find_options = FindOptions::builder().projection(doc! { "_id": 1 }).build();
+        let query = doc! {
+            "lastCrawl": {
+                "$lt": mongodb::bson::DateTime::from_millis(
+                    date.timestamp_millis(),
+                )
+            }
+        };
 
-        let channel = self
-            .collection
-            .find_one(doc! {"_id": id}, find_one_options)
-            .await?
-            .unwrap();
+        let cursor = self.collection.find(query, find_options).await?;
+        let channels: Vec<Document> = cursor.try_collect().await?;
 
-        let last_crawl = channel.get_datetime("lastCrawl")?;
+        let channel_ids = channels
+            .iter()
+            .map(|doc| doc.get_str("_id").unwrap().to_string())
+            .collect();
 
-        Ok(last_crawl.clone())
+        Ok(channel_ids)
     }
 
     pub async fn get_detected_language(&self, id: &str) -> Result<String, Error> {
@@ -76,6 +85,24 @@ impl ChannelRepository {
 
         self.collection
             .update_one(doc! {"_id": id}, doc! {"$set": channel}, update_options)
+            .await
+            .unwrap();
+    }
+
+    pub async fn set_scrape_error(&self, id: &str, error: String) {
+        self.collection
+            .update_one(
+                doc! {"_id": id},
+                doc! {
+                    "$set": {
+                        "scrapeError": {
+                            "at": mongodb::bson::DateTime::now(),
+                            "error": error
+                        }
+                    }
+                },
+                None,
+            )
             .await
             .unwrap();
     }
