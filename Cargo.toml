@@ -19,3 +19,4 @@ serde = "1.0.130"
 regex = "1"
 figment = { version = "0.10", features = ["json", "env"] }
 rand = "0.8.4"
+whatlang = "0.12.0"

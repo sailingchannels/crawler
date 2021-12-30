@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crawler::additional_channel_crawler::AdditionalChannelCrawler;
 use figment::{
     providers::{Env, Format, Json},
@@ -34,14 +36,16 @@ mod utils;
 
 #[tokio::main]
 pub async fn main() -> Result<(), anyhow::Error> {
-    SimpleLogger::new().with_level(LevelFilter::Info).init()?;
-
     let config: Config = Figment::new()
         .merge(Json::file("config.json"))
         .merge(Env::raw().only(&["MONGO_CONNECTION_STRING"]))
         .extract()?;
 
     debug!("{:?}", config);
+
+    SimpleLogger::new()
+        .with_level(LevelFilter::from_str(&config.log_level).unwrap())
+        .init()?;
 
     info!("Start connection to mongodb");
 

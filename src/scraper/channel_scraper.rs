@@ -2,6 +2,7 @@ use anyhow::Error;
 use chrono::{DateTime, Datelike, Duration, Utc};
 use log::info;
 use mongodb::bson::doc;
+use whatlang::{detect, Lang, Script};
 
 const DEVELOPMENT: &str = "development";
 
@@ -226,21 +227,20 @@ impl ChannelScraper {
         Ok(())
     }
 
-    async fn detect_language(&self, channel_id: &str, description: &str) -> Option<String> {
+    async fn detect_language(&self, channel_id: &str, text: &str) -> Option<String> {
         let channel_language_result = self.channel_repo.get_detected_language(channel_id).await;
 
         let language_detected = channel_language_result.is_ok();
 
         if language_detected == false && self.environment.eq(DEVELOPMENT) {
-            let detected_language = self
-                .detect_language_service
-                .detect_language(description)
-                .await;
+            let info = detect(text).unwrap();
 
-            detected_language
-        } else {
-            None
+            if info.is_reliable() {
+                return Some(info.lang().code()[..2].to_string());
+            }
         }
+
+        None
     }
 
     async fn store_view_count(&self, channel_id: &str, view_count: i64) {

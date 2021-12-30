@@ -7,6 +7,8 @@ use tokio::time::sleep;
 use crate::commands::crawl_channel_command::CrawlChannelCommand;
 use crate::repos::additional_channel_repo::AdditionalChannelRepository;
 
+const TEN_MINUTES_IN_SECONDS: u64 = 10 * 60;
+
 pub struct AdditionalChannelCrawler {
     sender: Sender<CrawlChannelCommand>,
     additional_channel_repo: AdditionalChannelRepository,
@@ -24,9 +26,8 @@ impl AdditionalChannelCrawler {
     }
 
     pub async fn crawl(&self) -> Result<(), Error> {
-        let fifteen_minutes_in_seconds: u64 = 15 * 60;
-
         loop {
+            info!("Start additional channel crawler");
             let additional_channels = self.additional_channel_repo.get_all().await?;
 
             if additional_channels.len() == 0 {
@@ -49,10 +50,10 @@ impl AdditionalChannelCrawler {
 
             info!(
                 "Wait for {} seconds until next crawl",
-                fifteen_minutes_in_seconds
+                TEN_MINUTES_IN_SECONDS
             );
 
-            sleep(Duration::from_secs(fifteen_minutes_in_seconds)).await;
+            sleep(Duration::from_secs(TEN_MINUTES_IN_SECONDS)).await;
         }
     }
 }

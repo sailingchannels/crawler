@@ -1,5 +1,10 @@
 use anyhow::Error;
+use log::info;
+use std::time::Duration;
 use tokio::sync::mpsc::Sender;
+use tokio::time::sleep;
+
+const FIVE_MINUTES_IN_SECONDS: u64 = 5 * 60;
 
 use crate::{
     commands::crawl_videos_command::CrawlVideosCommand, repos::channel_repo::ChannelRepository,
@@ -22,16 +27,25 @@ impl NewVideoCrawler {
     }
 
     pub async fn crawl(&self) -> Result<(), Error> {
-        let channels = self.channel_repo.get_all_ids().await?;
+        loop {
+            info!("Start new video crawler");
 
-        for channel in channels {
-            let command = CrawlVideosCommand {
-                channel_id: channel.clone(),
-            };
+            let channels = self.channel_repo.get_all_ids().await?;
 
-            self.sender.send(command).await?;
+            for channel in channels {
+                let command = CrawlVideosCommand {
+                    channel_id: channel.clone(),
+                };
+
+                self.sender.send(command).await?;
+            }
+
+            info!(
+                "Wait for {} seconds until next crawl",
+                FIVE_MINUTES_IN_SECONDS
+            );
+
+            sleep(Duration::from_secs(FIVE_MINUTES_IN_SECONDS)).await;
         }
-
-        Ok(())
     }
 }

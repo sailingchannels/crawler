@@ -1,5 +1,5 @@
 use anyhow::Error;
-use log::error;
+use log::{debug, error};
 use rand::Rng;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tokio_retry::Retry;
@@ -44,12 +44,13 @@ impl DetectLanguageService {
     }
 
     async fn call_detect_language_api(&self, text: &str) -> Result<DetectLanguageResponse, Error> {
-        let url = format!("{}q={}", BASE_URL, text);
+        let url = format!("{}?q={}", BASE_URL, text);
+        let api_key = self.get_api_key();
 
         let client = reqwest::Client::new();
         let resp = client
             .post(url)
-            .header("Authorization", format!("Bearer: {}", self.get_api_key()))
+            .header("Authorization", format!("Bearer: {}", api_key))
             .send()
             .await?
             .json::<DetectLanguageResponse>()
