@@ -14,7 +14,6 @@ use simple_logger::SimpleLogger;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::{self, JoinHandle};
 
-use crate::repos::non_sailing_channel_repo::NonSailingChannelRepository;
 use crate::scraper::channel_scraper::ChannelScraper;
 use crate::{
     commands::crawl_channel_command::CrawlChannelCommand,
@@ -25,6 +24,10 @@ use crate::{
     crawler::channel_update_crawler::ChannelUpdateCrawler, repos::video_repo::VideoRepository,
 };
 use crate::{crawler::new_video_crawler::NewVideoCrawler, repos::channel_repo::ChannelRepository};
+use crate::{
+    repos::non_sailing_channel_repo::NonSailingChannelRepository,
+    scraper::video_scraper::VideoScraper,
+};
 
 mod commands;
 mod crawler;
@@ -59,16 +62,18 @@ pub async fn main() -> Result<(), anyhow::Error> {
     let (channel_scraper_tx, channel_scraper_rx) = channel::<CrawlChannelCommand>(usize::MAX >> 3);
     let (video_scraper_tx, video_scraper_rx) = channel::<CrawlVideosCommand>(usize::MAX >> 3);
 
-    register_additional_channel_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
-    register_channel_update_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
-    register_new_video_crawler(&mut tasks, db_client.clone(), video_scraper_tx.clone());
-
     register_channel_scraper(
         &mut tasks,
         db_client.clone(),
         config.clone(),
         channel_scraper_rx,
     );
+
+    register_video_scraper(&mut tasks, db_client.clone(), video_scraper_rx);
+
+    //register_additional_channel_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
+    //register_channel_update_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
+    register_new_video_crawler(&mut tasks, db_client.clone(), video_scraper_tx.clone());
 
     await_all(tasks).await;
 
@@ -168,6 +173,26 @@ fn register_channel_scraper(
     });
 
     tasks.push(channel_scraper_task);
+}
+
+fn register_video_scraper(
+    tasks: &mut Vec<JoinHandle<()>>,
+    mongo_client: Client,
+    mut rx: Receiver<CrawlVideosCommand>,
+) {
+    let video_scraper_task = task::spawn(async move {
+        info!("Start video scrape listener");
+
+        let video_repo = VideoRepository::new(&mongo_client);
+        let channel_repo = ChannelRepository::new(&mongo_client);
+        let scraper = VideoScraper::new(video_repo, channel_repo);
+
+        while let Some(cmd) = rx.recv().await {
+            scraper.scrape(cmd.channel_id).await.unwrap();
+        }
+    });
+
+    tasks.push(video_scraper_task);
 }
 
 async fn get_sailing_terms(mongo_client: &Client) -> Vec<String> {

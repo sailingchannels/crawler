@@ -7,6 +7,7 @@ use whatlang::detect;
 const DEVELOPMENT: &str = "development";
 
 use crate::{
+    models::youtube_channel_details::YoutubeStatisticsItem,
     repos::{
         channel_repo::ChannelRepository, non_sailing_channel_repo::NonSailingChannelRepository,
         subscriber_repo::SubscriberRepository, video_repo::VideoRepository,
@@ -60,18 +61,9 @@ impl ChannelScraper {
     ) -> Result<(), Error> {
         info!("Start scraping channel {}", channel_id);
 
-        let channel_details_result = self.youtube_service.get_channel_details(&channel_id).await;
-        let channel_details = match channel_details_result {
-            Ok(channel_details) => channel_details,
-            Err(err) => {
-                error!("Failed to get channel details for {}: {}", channel_id, err);
-
-                self.channel_repo
-                    .set_scrape_error(&channel_id, err.to_string())
-                    .await;
-
-                return Ok(());
-            }
+        let channel_details = match self.load_channel_details(&channel_id).await {
+            Ok(value) => value,
+            Err(value) => return value,
         };
 
         let description = channel_details.snippet.description.unwrap_or_default();
@@ -155,6 +147,27 @@ impl ChannelScraper {
         }
 
         Ok(())
+    }
+
+    async fn load_channel_details(
+        &self,
+        channel_id: &String,
+    ) -> Result<YoutubeStatisticsItem, Result<(), Error>> {
+        let channel_details_result = self.youtube_service.get_channel_details(channel_id).await;
+        let channel_details = match channel_details_result {
+            Ok(channel_details) => channel_details,
+            Err(err) => {
+                error!("Failed to get channel details for {}: {}", channel_id, err);
+
+                self.channel_repo
+                    .set_scrape_error(channel_id, err.to_string())
+                    .await;
+
+                return Err(Ok(()));
+            }
+        };
+
+        Ok(channel_details)
     }
 
     async fn has_sailing_term(

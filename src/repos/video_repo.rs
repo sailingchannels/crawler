@@ -55,4 +55,13 @@ impl VideoRepository {
 
         Ok(())
     }
+
+    pub async fn count(&self, channel_id: &str) -> Result<u64, anyhow::Error> {
+        let count = self
+            .collection
+            .count_documents(doc! {"channel": channel_id}, None)
+            .await?;
+
+        Ok(count)
+    }
 }

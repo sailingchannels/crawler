@@ -2,41 +2,39 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct YoutubeStatisticsResponse {
+pub struct YouTubeVideoDetails {
     pub kind: String,
     pub etag: String,
+    pub items: Vec<YouTubeVideoItem>,
     pub page_info: PageInfo,
-    pub items: Vec<YoutubeStatisticsItem>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PageInfo {
-    pub total_results: i64,
-    pub results_per_page: i64,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct YoutubeStatisticsItem {
+pub struct YouTubeVideoItem {
     pub kind: String,
     pub etag: String,
     pub id: String,
     pub snippet: Snippet,
+    pub status: Status,
     pub statistics: Statistics,
-    pub branding_settings: BrandingSettings,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snippet {
-    pub title: String,
-    pub description: Option<String>,
-    pub custom_url: Option<String>,
     pub published_at: String,
+    pub channel_id: String,
+    pub title: String,
+    pub description: String,
     pub thumbnails: Thumbnails,
+    pub channel_title: String,
+    pub tags: Vec<String>,
+    pub category_id: String,
+    pub live_broadcast_content: String,
+    pub default_language: String,
     pub localized: Localized,
-    pub country: Option<String>,
+    pub default_audio_language: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -45,6 +43,8 @@ pub struct Thumbnails {
     pub default: Default,
     pub medium: Medium,
     pub high: High,
+    pub standard: Standard,
+    pub maxres: Maxres,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -73,41 +73,50 @@ pub struct High {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Standard {
+    pub url: String,
+    pub width: i64,
+    pub height: i64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Maxres {
+    pub url: String,
+    pub width: i64,
+    pub height: i64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Localized {
     pub title: String,
-    pub description: Option<String>,
+    pub description: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Status {
+    pub upload_status: String,
+    pub privacy_status: String,
+    pub license: String,
+    pub embeddable: bool,
+    pub public_stats_viewable: bool,
+    pub made_for_kids: bool,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Statistics {
     pub view_count: String,
-    pub subscriber_count: Option<String>,
-    pub hidden_subscriber_count: bool,
-    pub video_count: String,
+    pub like_count: String,
+    pub favorite_count: String,
+    pub comment_count: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BrandingSettings {
-    pub channel: Channel,
-    pub image: Option<Image>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Channel {
-    pub title: String,
-    pub description: Option<String>,
-    pub keywords: Option<String>,
-    pub tracking_analytics_account_id: Option<String>,
-    pub moderate_comments: Option<bool>,
-    pub unsubscribed_trailer: Option<String>,
-    pub country: Option<String>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Image {
-    pub banner_external_url: String,
+pub struct PageInfo {
+    pub total_results: i64,
+    pub results_per_page: i64,
 }

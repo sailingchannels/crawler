@@ -89,6 +89,29 @@ impl ChannelRepository {
             .unwrap();
     }
 
+    pub async fn set_video_count_last_upload(
+        &self,
+        id: &str,
+        video_count: i64,
+        last_upload_timestamp_millis: i64,
+    ) {
+        self.collection
+            .update_one(
+                doc! {"_id": id},
+                doc! {
+                    "$set": {
+                        "videoCount": video_count,
+                        "lastUploadAt": mongodb::bson::DateTime::from_millis(
+                            last_upload_timestamp_millis,
+                        )
+                    }
+                },
+                None,
+            )
+            .await
+            .unwrap();
+    }
+
     pub async fn set_scrape_error(&self, id: &str, error: String) {
         self.collection
             .update_one(
