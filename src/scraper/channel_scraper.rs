@@ -98,9 +98,7 @@ impl ChannelScraper {
             "_id": channel_id.to_string(),
             "title": channel_details.snippet.title.to_string(),
             "description": description.to_string(),
-            "publishedAt": mongodb::bson::DateTime::from_millis(
-                published_date.timestamp_millis(),
-            ),
+            "publishedAt": published_date.timestamp(),
             "thumbnail": channel_details.snippet.thumbnails.default.url.to_string(),
             "subscribers": subscriber_count,
             "views": view_count,

@@ -1,7 +1,7 @@
 use anyhow::Error;
 use chrono::Utc;
 use futures::stream::TryStreamExt;
-use mongodb::bson::{doc, DateTime, Document};
+use mongodb::bson::{doc, Document};
 use mongodb::options::{FindOneOptions, FindOptions};
 use mongodb::{Client, Collection};
 
@@ -93,7 +93,7 @@ impl ChannelRepository {
         &self,
         id: &str,
         video_count: i64,
-        last_upload_timestamp_millis: i64,
+        last_upload_timestamp: i64,
     ) {
         self.collection
             .update_one(
@@ -101,9 +101,7 @@ impl ChannelRepository {
                 doc! {
                     "$set": {
                         "videoCount": video_count,
-                        "lastUploadAt": mongodb::bson::DateTime::from_millis(
-                            last_upload_timestamp_millis,
-                        )
+                        "lastUploadAt": last_upload_timestamp,
                     }
                 },
                 None,

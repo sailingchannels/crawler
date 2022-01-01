@@ -1,6 +1,9 @@
+use std::collections::HashMap;
+
 use anyhow::Error;
+use chrono::{TimeZone, Utc};
 use futures::stream::TryStreamExt;
-use mongodb::bson::{doc, DateTime, Document};
+use mongodb::bson::{doc, Document};
 use mongodb::options::{FindOneOptions, FindOptions};
 use mongodb::{Client, Collection};
 
@@ -18,22 +21,34 @@ impl VideoRepository {
         }
     }
 
-    pub async fn get_by_id(&self, id: String) -> Result<Document, Error> {
-        let find_options = FindOneOptions::builder()
+    pub async fn get_updated_lookup(
+        &self,
+        channel_id: &str,
+    ) -> Result<HashMap<String, chrono::DateTime<Utc>>, Error> {
+        let find_options = FindOptions::builder()
             .projection(doc! {
                 "_id" : 1,
-                "updatedAt" : 1,
-                "publishedAt": 1
+                "updatedAt" : 1
             })
             .build();
 
-        let video = self
-            .collection
-            .find_one(doc! {"_id": id}, find_options)
-            .await?
-            .unwrap();
+        let query = doc! {"channel": channel_id};
 
-        Ok(video)
+        let cursor = self.collection.find(query, find_options).await?;
+        let videos: Vec<Document> = cursor.try_collect().await?;
+
+        let video_updated_lookup = videos
+            .iter()
+            .filter(|doc| doc.contains_key("updatedAt") && doc.get_i64("updatedAt").is_ok())
+            .map(|doc| {
+                let id = doc.get_str("_id").unwrap().to_string();
+                let updated_at = doc.get_i64("updatedAt").unwrap();
+
+                (id, Utc.timestamp(updated_at as i64, 0))
+            })
+            .collect::<HashMap<String, chrono::DateTime<Utc>>>();
+
+        Ok(video_updated_lookup)
     }
 
     pub async fn delete(&self, id: &str) -> Result<(), anyhow::Error> {

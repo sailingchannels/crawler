@@ -27,71 +27,12 @@ pub struct Snippet {
     pub channel_id: String,
     pub title: String,
     pub description: String,
-    pub thumbnails: Thumbnails,
     pub channel_title: String,
-    pub tags: Vec<String>,
+    pub tags: Option<Vec<String>>,
     pub category_id: String,
     pub live_broadcast_content: String,
     pub default_language: String,
-    pub localized: Localized,
     pub default_audio_language: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Thumbnails {
-    pub default: Default,
-    pub medium: Medium,
-    pub high: High,
-    pub standard: Standard,
-    pub maxres: Maxres,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Default {
-    pub url: String,
-    pub width: i64,
-    pub height: i64,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Medium {
-    pub url: String,
-    pub width: i64,
-    pub height: i64,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct High {
-    pub url: String,
-    pub width: i64,
-    pub height: i64,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Standard {
-    pub url: String,
-    pub width: i64,
-    pub height: i64,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Maxres {
-    pub url: String,
-    pub width: i64,
-    pub height: i64,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Localized {
-    pub title: String,
-    pub description: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 tokio-retry = "0.3"
-mongodb = { version = "2.0.2", default-features = false, features = ["tokio-runtime"]}
+mongodb = { version = "2.0.2", default-features = false, features = ["tokio-runtime", "bson-chrono-0_4"]}
 anyhow = "1.0.48"
 futures = "0.3"
 log = "0.4.14"
