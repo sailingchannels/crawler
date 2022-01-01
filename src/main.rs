@@ -69,7 +69,12 @@ pub async fn main() -> Result<(), anyhow::Error> {
         channel_scraper_rx,
     );
 
-    register_video_scraper(&mut tasks, db_client.clone(), video_scraper_rx);
+    register_video_scraper(
+        &mut tasks,
+        db_client.clone(),
+        config.clone(),
+        video_scraper_rx,
+    );
 
     //register_additional_channel_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
     //register_channel_update_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
@@ -178,6 +183,7 @@ fn register_channel_scraper(
 fn register_video_scraper(
     tasks: &mut Vec<JoinHandle<()>>,
     mongo_client: Client,
+    config: Config,
     mut rx: Receiver<CrawlVideosCommand>,
 ) {
     let video_scraper_task = task::spawn(async move {
@@ -185,7 +191,7 @@ fn register_video_scraper(
 
         let video_repo = VideoRepository::new(&mongo_client);
         let channel_repo = ChannelRepository::new(&mongo_client);
-        let scraper = VideoScraper::new(video_repo, channel_repo);
+        let scraper = VideoScraper::new(video_repo, channel_repo, config.youtube_api_keys);
 
         while let Some(cmd) = rx.recv().await {
             scraper.scrape(cmd.channel_id).await.unwrap();

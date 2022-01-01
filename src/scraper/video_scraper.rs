@@ -6,6 +6,7 @@ use quick_xml::de::from_str;
 use crate::{
     models::youtube_video_feed_response::{Entry, YoutubeVideoFeedResponse},
     repos::{channel_repo::ChannelRepository, video_repo::VideoRepository},
+    services::youtube_service::YoutubeService,
 };
 
 const YOUTUBE_VIDEO_FEED_BASE_URL: &str = "https://www.youtube.com/feeds/videos.xml";
@@ -13,13 +14,19 @@ const YOUTUBE_VIDEO_FEED_BASE_URL: &str = "https://www.youtube.com/feeds/videos.
 pub struct VideoScraper {
     video_repo: VideoRepository,
     channel_repo: ChannelRepository,
+    youtube_service: YoutubeService,
 }
 
 impl VideoScraper {
-    pub fn new(video_repo: VideoRepository, channel_repo: ChannelRepository) -> Self {
+    pub fn new(
+        video_repo: VideoRepository,
+        channel_repo: ChannelRepository,
+        youtube_api_keys: Vec<String>,
+    ) -> Self {
         Self {
             video_repo,
             channel_repo,
+            youtube_service: YoutubeService::new(youtube_api_keys),
         }
     }
 
@@ -38,6 +45,11 @@ impl VideoScraper {
             if published.timestamp_millis() > max_last_upload_timestamp_millis {
                 max_last_upload_timestamp_millis = published.timestamp_millis();
             }
+
+            let video_details = self
+                .youtube_service
+                .get_video_details(&entry.video_id)
+                .await?;
         }
 
         self.update_channel_video_stats(&channel_id, max_last_upload_timestamp_millis)
