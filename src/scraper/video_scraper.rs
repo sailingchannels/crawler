@@ -13,9 +13,9 @@ use crate::{
     },
     repos::{channel_repo::ChannelRepository, video_repo::VideoRepository},
     services::youtube_service::YoutubeService,
+    utils::consts::DEVELOPMENT,
 };
 
-const DEVELOPMENT: &str = "development";
 const YOUTUBE_VIDEO_FEED_BASE_URL: &str = "https://www.youtube.com/feeds/videos.xml";
 
 pub struct VideoScraper {
@@ -78,9 +78,8 @@ impl VideoScraper {
                 max_last_upload_timestamp = published.timestamp();
             }
 
-            if self.environment.eq(DEVELOPMENT) {
-                info!("{:?}", vid);
-            } else {
+            info!("Updating video {}", entry.video_id);
+            if self.environment.ne(DEVELOPMENT) {
                 self.video_repo.upsert(&entry.video_id, vid).await?;
             }
         }
@@ -135,7 +134,7 @@ impl VideoScraper {
             .parse::<i64>()
             .unwrap_or_default();
 
-        let vid = doc! {
+        let mut vid = doc! {
             "_id": entry.video_id.clone(),
             "title": entry.title.clone(),
             "description": entry.group.description.clone(),
@@ -146,8 +145,15 @@ impl VideoScraper {
             "comments": comments,
             "channel": channel_id.clone(),
             "geoChecked": false,
-            "tags": video_details.snippet.tags.clone()
+            "tags": video_details.snippet.tags.clone().unwrap_or_default(),
         };
+
+        if video_details.snippet.default_language.is_some() {
+            vid.insert(
+                "defaultLanguage",
+                video_details.snippet.default_language.clone().unwrap(),
+            );
+        }
 
         vid
     }

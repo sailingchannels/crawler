@@ -27,12 +27,8 @@ pub struct Snippet {
     pub channel_id: String,
     pub title: String,
     pub description: String,
-    pub channel_title: String,
     pub tags: Option<Vec<String>>,
-    pub category_id: String,
-    pub live_broadcast_content: String,
-    pub default_language: String,
-    pub default_audio_language: String,
+    pub default_language: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

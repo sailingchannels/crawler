@@ -5,13 +5,15 @@ use mongodb::bson::{doc, Document};
 use mongodb::options::{FindOneOptions, FindOptions};
 use mongodb::{Client, Collection};
 
+use crate::utils::db::get_db_name;
+
 pub struct ChannelRepository {
     collection: Collection<Document>,
 }
 
 impl ChannelRepository {
-    pub fn new(client: &Client) -> ChannelRepository {
-        let db = client.database("sailing-channels");
+    pub fn new(client: &Client, environment: &str) -> ChannelRepository {
+        let db = client.database(&get_db_name(&environment));
         let channels = db.collection::<Document>("channels");
 
         ChannelRepository {

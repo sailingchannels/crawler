@@ -39,11 +39,13 @@ impl AdditionalChannelCrawler {
                 info!("Send additional channel for crawling: {}", channel_id);
 
                 let cmd = CrawlChannelCommand {
-                    channel_id,
+                    channel_id: channel_id.clone(),
                     ignore_sailing_terms,
                 };
 
                 self.sender.send(cmd).await?;
+
+                self.additional_channel_repo.delete_one(&channel_id).await?;
             }
 
             info!(

@@ -3,13 +3,15 @@ use futures::stream::TryStreamExt;
 use mongodb::bson::{doc, Document};
 use mongodb::{Client, Collection};
 
+use crate::utils::db::get_db_name;
+
 pub struct SailingTermRepository {
     collection: Collection<Document>,
 }
 
 impl SailingTermRepository {
-    pub fn new(client: &Client) -> SailingTermRepository {
-        let db = client.database("sailing-channels");
+    pub fn new(client: &Client, environment: &str) -> SailingTermRepository {
+        let db = client.database(&get_db_name(&environment));
         let feeds = db.collection::<Document>("sailingterms");
 
         SailingTermRepository { collection: feeds }

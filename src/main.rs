@@ -76,9 +76,26 @@ pub async fn main() -> Result<(), anyhow::Error> {
         video_scraper_rx,
     );
 
-    //register_additional_channel_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
-    //register_channel_update_crawler(&mut tasks, db_client.clone(), channel_scraper_tx.clone());
-    register_new_video_crawler(&mut tasks, db_client.clone(), video_scraper_tx.clone());
+    register_additional_channel_crawler(
+        &mut tasks,
+        db_client.clone(),
+        config.clone(),
+        channel_scraper_tx.clone(),
+    );
+
+    register_channel_update_crawler(
+        &mut tasks,
+        db_client.clone(),
+        config.clone(),
+        channel_scraper_tx.clone(),
+    );
+
+    register_new_video_crawler(
+        &mut tasks,
+        db_client.clone(),
+        config.clone(),
+        video_scraper_tx.clone(),
+    );
 
     await_all(tasks).await;
 
@@ -94,10 +111,12 @@ async fn await_all(tasks: Vec<JoinHandle<()>>) {
 fn register_additional_channel_crawler(
     tasks: &mut Vec<JoinHandle<()>>,
     mongo_client: Client,
+    config: Config,
     tx: Sender<CrawlChannelCommand>,
 ) {
     let additional_channel_crawling_task = task::spawn(async move {
-        let additional_channel_repo = AdditionalChannelRepository::new(&mongo_client);
+        let additional_channel_repo =
+            AdditionalChannelRepository::new(&mongo_client, &config.environment);
         let crawler = AdditionalChannelCrawler::new(tx, additional_channel_repo);
 
         info!("Start additional channel crawling");
@@ -110,10 +129,11 @@ fn register_additional_channel_crawler(
 fn register_channel_update_crawler(
     tasks: &mut Vec<JoinHandle<()>>,
     mongo_client: Client,
+    config: Config,
     tx: Sender<CrawlChannelCommand>,
 ) {
     let channel_update_crawling_task = task::spawn(async move {
-        let channel_repo = ChannelRepository::new(&mongo_client);
+        let channel_repo = ChannelRepository::new(&mongo_client, &config.environment);
         let crawler = ChannelUpdateCrawler::new(tx, channel_repo);
 
         info!("Start channel update crawling");
@@ -126,10 +146,11 @@ fn register_channel_update_crawler(
 fn register_new_video_crawler(
     tasks: &mut Vec<JoinHandle<()>>,
     mongo_client: Client,
+    config: Config,
     tx: Sender<CrawlVideosCommand>,
 ) {
     let new_video_crawling_task = task::spawn(async move {
-        let channel_repo = ChannelRepository::new(&mongo_client);
+        let channel_repo = ChannelRepository::new(&mongo_client, &config.environment);
         let crawler = NewVideoCrawler::new(tx, channel_repo);
 
         info!("Start new video crawling");
@@ -148,14 +169,16 @@ fn register_channel_scraper(
     let channel_scraper_task = task::spawn(async move {
         info!("Start channel scrape listener");
 
-        let channel_repo = ChannelRepository::new(&mongo_client);
-        let non_sailing_channel_repo = NonSailingChannelRepository::new(&mongo_client);
-        let view_repo = ViewRepository::new(&mongo_client);
-        let subscriber_repo = SubscriberRepository::new(&mongo_client);
-        let video_repo = VideoRepository::new(&mongo_client);
+        let channel_repo = ChannelRepository::new(&mongo_client, &config.environment);
+        let non_sailing_channel_repo =
+            NonSailingChannelRepository::new(&mongo_client, &config.environment);
+        let view_repo = ViewRepository::new(&mongo_client, &config.environment);
+        let subscriber_repo = SubscriberRepository::new(&mongo_client, &config.environment);
+        let video_repo = VideoRepository::new(&mongo_client, &config.environment);
 
-        let sailing_terms = get_sailing_terms(&mongo_client).await;
-        let blacklisted_channel_ids = get_blacklisted_channels(&mongo_client).await;
+        let sailing_terms = get_sailing_terms(&mongo_client, &config.environment).await;
+        let blacklisted_channel_ids =
+            get_blacklisted_channels(&mongo_client, &config.environment).await;
 
         let scraper = ChannelScraper::new(
             channel_repo,
@@ -189,9 +212,14 @@ fn register_video_scraper(
     let video_scraper_task = task::spawn(async move {
         info!("Start video scrape listener");
 
-        let video_repo = VideoRepository::new(&mongo_client);
-        let channel_repo = ChannelRepository::new(&mongo_client);
-        let scraper = VideoScraper::new(video_repo, channel_repo, config.youtube_api_keys, config.environment);
+        let video_repo = VideoRepository::new(&mongo_client, &config.environment);
+        let channel_repo = ChannelRepository::new(&mongo_client, &config.environment);
+        let scraper = VideoScraper::new(
+            video_repo,
+            channel_repo,
+            config.youtube_api_keys,
+            config.environment,
+        );
 
         while let Some(cmd) = rx.recv().await {
             scraper.scrape(cmd.channel_id).await.unwrap();
@@ -201,15 +229,15 @@ fn register_video_scraper(
     tasks.push(video_scraper_task);
 }
 
-async fn get_sailing_terms(mongo_client: &Client) -> Vec<String> {
-    let sailing_term_repo = SailingTermRepository::new(&mongo_client);
+async fn get_sailing_terms(mongo_client: &Client, environment: &str) -> Vec<String> {
+    let sailing_term_repo = SailingTermRepository::new(&mongo_client, environment);
     let sailing_terms = sailing_term_repo.get_all().await.unwrap();
 
     sailing_terms
 }
 
-async fn get_blacklisted_channels(mongo_client: &Client) -> Vec<String> {
-    let blacklist_repo = BlacklistRepository::new(&mongo_client);
+async fn get_blacklisted_channels(mongo_client: &Client, environment: &str) -> Vec<String> {
+    let blacklist_repo = BlacklistRepository::new(&mongo_client, environment);
     let blacklisted_channels = blacklist_repo.get_all().await.unwrap();
 
     blacklisted_channels

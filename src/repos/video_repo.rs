@@ -4,16 +4,18 @@ use anyhow::Error;
 use chrono::{TimeZone, Utc};
 use futures::stream::TryStreamExt;
 use mongodb::bson::{doc, Document};
-use mongodb::options::{FindOneOptions, FindOptions};
+use mongodb::options::FindOptions;
 use mongodb::{Client, Collection};
+
+use crate::utils::db::get_db_name;
 
 pub struct VideoRepository {
     collection: Collection<Document>,
 }
 
 impl VideoRepository {
-    pub fn new(client: &Client) -> VideoRepository {
-        let db = client.database("sailing-channels");
+    pub fn new(client: &Client, environment: &str) -> VideoRepository {
+        let db = client.database(&get_db_name(&environment));
         let channels = db.collection::<Document>("videos");
 
         VideoRepository {

@@ -3,13 +3,15 @@ use futures::stream::TryStreamExt;
 use mongodb::bson::{doc, Document};
 use mongodb::{Client, Collection};
 
+use crate::utils::db::get_db_name;
+
 pub struct BlacklistRepository {
     collection: Collection<Document>,
 }
 
 impl BlacklistRepository {
-    pub fn new(client: &Client) -> BlacklistRepository {
-        let db = client.database("sailing-channels");
+    pub fn new(client: &Client, environment: &str) -> BlacklistRepository {
+        let db = client.database(&get_db_name(&environment));
         let feeds = db.collection::<Document>("blacklist");
 
         BlacklistRepository { collection: feeds }

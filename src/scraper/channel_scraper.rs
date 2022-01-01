@@ -4,8 +4,6 @@ use log::{debug, error, info, warn};
 use mongodb::bson::doc;
 use whatlang::detect;
 
-const DEVELOPMENT: &str = "development";
-
 use crate::{
     models::youtube_channel_details::YoutubeStatisticsItem,
     repos::{
@@ -14,7 +12,7 @@ use crate::{
         view_repo::ViewRepository,
     },
     services::youtube_service::YoutubeService,
-    utils::keyword_utils,
+    utils::{consts::DEVELOPMENT, keyword_utils},
 };
 
 pub struct ChannelScraper {

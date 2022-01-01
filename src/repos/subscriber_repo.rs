@@ -1,13 +1,15 @@
 use mongodb::bson::{doc, Document};
 use mongodb::{Client, Collection};
 
+use crate::utils::db::get_db_name;
+
 pub struct SubscriberRepository {
     collection: Collection<Document>,
 }
 
 impl SubscriberRepository {
-    pub fn new(client: &Client) -> SubscriberRepository {
-        let db = client.database("sailing-channels");
+    pub fn new(client: &Client, environment: &str) -> SubscriberRepository {
+        let db = client.database(&get_db_name(&environment));
         let channels = db.collection::<Document>("subscribers");
 
         SubscriberRepository {
