@@ -95,7 +95,7 @@ impl ChannelScraper {
         let published_date = DateTime::parse_from_rfc3339(&channel_details.snippet.published_at)?;
 
         let mut channel = doc! {
-            "id": channel_id.to_string(),
+            "_id": channel_id.to_string(),
             "title": channel_details.snippet.title.to_string(),
             "description": description.to_string(),
             "publishedAt": mongodb::bson::DateTime::from_millis(
@@ -211,7 +211,7 @@ impl ChannelScraper {
         self.channel_repo.delete(channel_id).await?;
         self.view_repo.delete_by_channel(channel_id).await?;
         self.subscriber_repo.delete_by_channel(channel_id).await?;
-        self.video_repo.delete_by_channel(channel_id).await?;
+        self.video_repo.delete_all_by_channel(channel_id).await?;
 
         Ok(())
     }

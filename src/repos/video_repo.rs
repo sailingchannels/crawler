@@ -36,7 +36,13 @@ impl VideoRepository {
         Ok(video)
     }
 
-    pub async fn delete_by_channel(&self, channel_id: &str) -> Result<(), anyhow::Error> {
+    pub async fn delete(&self, id: &str) -> Result<(), anyhow::Error> {
+        self.collection.delete_one(doc! {"_id": id}, None).await?;
+
+        Ok(())
+    }
+
+    pub async fn delete_all_by_channel(&self, channel_id: &str) -> Result<(), anyhow::Error> {
         self.collection
             .delete_many(doc! {"channel": channel_id}, None)
             .await?;
@@ -44,13 +50,13 @@ impl VideoRepository {
         Ok(())
     }
 
-    pub async fn upsert(&self, id: String, channel: Document) -> Result<(), anyhow::Error> {
+    pub async fn upsert(&self, id: &str, video_doc: Document) -> Result<(), anyhow::Error> {
         let update_options = mongodb::options::UpdateOptions::builder()
             .upsert(true)
             .build();
 
         self.collection
-            .update_one(doc! {"_id": id}, doc! {"$set": channel}, update_options)
+            .update_one(doc! {"_id": id}, doc! {"$set": video_doc}, update_options)
             .await?;
 
         Ok(())

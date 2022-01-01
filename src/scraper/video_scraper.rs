@@ -1,10 +1,14 @@
 use anyhow::Error;
 use chrono::{DateTime, FixedOffset};
+use log::info;
 use mongodb::bson::{doc, Document};
 use quick_xml::de::from_str;
 
 use crate::{
-    models::youtube_video_feed_response::{Entry, YoutubeVideoFeedResponse},
+    models::{
+        youtube_video_details::YouTubeVideoItem,
+        youtube_video_feed_response::{Entry, YoutubeVideoFeedResponse},
+    },
     repos::{channel_repo::ChannelRepository, video_repo::VideoRepository},
     services::youtube_service::YoutubeService,
 };
@@ -33,23 +37,33 @@ impl VideoScraper {
     pub async fn scrape(&self, channel_id: String) -> Result<(), Error> {
         let channel_feed = load_and_parse_video_feed(&channel_id).await?;
 
-        let mut videos = vec![];
         let mut max_last_upload_timestamp_millis: i64 = 0;
 
         for entry in channel_feed.entries.iter() {
             let published = DateTime::parse_from_rfc3339(&entry.published)?;
 
-            let vid = self.build_video_document(&channel_id, &entry, published);
-            videos.push(vid);
+            let video_details = self
+                .youtube_service
+                .get_video_details(&entry.video_id)
+                .await?;
+
+            if video_details.status.privacy_status.ne("public") {
+                self.video_repo.delete(&channel_id).await?;
+                info!(
+                    "Video {} is private, delete if exists and skipping",
+                    entry.video_id
+                );
+
+                continue;
+            }
+
+            let vid = self.build_video_document(&channel_id, &entry, published, &video_details);
 
             if published.timestamp_millis() > max_last_upload_timestamp_millis {
                 max_last_upload_timestamp_millis = published.timestamp_millis();
             }
 
-            let video_details = self
-                .youtube_service
-                .get_video_details(&entry.video_id)
-                .await?;
+            self.video_repo.upsert(&entry.video_id, vid).await?;
         }
 
         self.update_channel_video_stats(&channel_id, max_last_upload_timestamp_millis)
@@ -81,12 +95,30 @@ impl VideoScraper {
         channel_id: &str,
         entry: &Entry,
         published: DateTime<FixedOffset>,
+        video_details: &YouTubeVideoItem,
     ) -> Document {
-        let tags: Vec<String> = vec![];
         let updated = DateTime::parse_from_rfc3339(&entry.updated).unwrap();
 
+        let views = video_details
+            .statistics
+            .view_count
+            .parse::<i64>()
+            .unwrap_or_default();
+
+        let likes = video_details
+            .statistics
+            .like_count
+            .parse::<i64>()
+            .unwrap_or_default();
+
+        let comments = video_details
+            .statistics
+            .comment_count
+            .parse::<i64>()
+            .unwrap_or_default();
+
         let vid = doc! {
-            "id": entry.video_id.clone(),
+            "_id": entry.video_id.clone(),
             "title": entry.title.clone(),
             "description": entry.group.description.clone(),
             "publishedAt": mongodb::bson::DateTime::from_millis(
@@ -95,10 +127,12 @@ impl VideoScraper {
             "updatedAt": mongodb::bson::DateTime::from_millis(
                 updated.timestamp_millis(),
             ),
-            "views": entry.group.community.statistics.views,
+            "views": views,
+            "likes": likes,
+            "comments": comments,
             "channel": channel_id.clone(),
             "geoChecked": false,
-            "tags": tags,
+            "tags": video_details.snippet.tags.clone()
         };
 
         vid
