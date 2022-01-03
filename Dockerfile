@@ -17,7 +17,7 @@ COPY ./src ./src
 
 # build for release
 RUN rm ./target/release/deps/crawler*
-RUN cargo build --bin crawler --release
+RUN cargo build --release
 
 # our final base
 FROM debian:buster-slim

@@ -174,6 +174,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "crawler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "figment",
+ "futures",
+ "log",
+ "mongodb",
+ "quick-xml",
+ "rand",
+ "regex",
+ "reqwest",
+ "serde",
+ "simple_logger",
+ "tokio",
+ "tokio-retry",
+ "whatlang",
+]
+
+[[package]]
 name = "crypto-mac"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1235,27 +1256,6 @@ name = "ryu"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73b4b750c782965c211b42f022f59af1fbceabdd026623714f104152f1ec149f"
-
-[[package]]
-name = "sailing-channels-crawler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "figment",
- "futures",
- "log",
- "mongodb",
- "quick-xml",
- "rand",
- "regex",
- "reqwest",
- "serde",
- "simple_logger",
- "tokio",
- "tokio-retry",
- "whatlang",
-]
 
 [[package]]
 name = "schannel"
