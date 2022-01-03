@@ -1,6 +1,6 @@
 use anyhow::Error;
 use chrono::{DateTime, Datelike, Utc};
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use mongodb::bson::doc;
 use whatlang::detect;
 
@@ -12,7 +12,7 @@ use crate::{
         view_repo::ViewRepository,
     },
     services::youtube_service::YoutubeService,
-    utils::{consts::DEVELOPMENT, keyword_utils},
+    utils::keyword_utils,
 };
 
 pub struct ChannelScraper {
@@ -24,7 +24,6 @@ pub struct ChannelScraper {
     youtube_service: YoutubeService,
     sailing_terms: Vec<String>,
     blacklisted_channel_ids: Vec<String>,
-    environment: String,
 }
 
 impl ChannelScraper {
@@ -37,7 +36,6 @@ impl ChannelScraper {
         sailing_terms: Vec<String>,
         blacklisted_channel_ids: Vec<String>,
         youtube_api_keys: Vec<String>,
-        environment: String,
     ) -> ChannelScraper {
         ChannelScraper {
             channel_repo,
@@ -48,7 +46,6 @@ impl ChannelScraper {
             youtube_service: YoutubeService::new(youtube_api_keys),
             sailing_terms,
             blacklisted_channel_ids,
-            environment,
         }
     }
 
@@ -136,11 +133,7 @@ impl ChannelScraper {
         self.store_subscriber_count(&channel_id, subscriber_count)
             .await;
 
-        if self.environment.eq(DEVELOPMENT) {
-            debug!("Channel {} stored", channel_id);
-        } else {
-            self.channel_repo.upsert(&channel_id, channel).await;
-        }
+        self.channel_repo.upsert(&channel_id, channel).await;
 
         Ok(())
     }

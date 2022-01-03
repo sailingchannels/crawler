@@ -20,6 +20,9 @@
 				}
 			},
 			"args": [],
+			"env": {
+				"RUST_BACKTRACE": "full"
+			},
 			"cwd": "${workspaceFolder}"
 		},
 		{

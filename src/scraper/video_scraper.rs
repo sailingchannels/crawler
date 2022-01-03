@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use chrono::{DateTime, FixedOffset, Utc};
 use log::info;
 use mongodb::bson::{doc, Document};
@@ -13,7 +13,6 @@ use crate::{
     },
     repos::{channel_repo::ChannelRepository, video_repo::VideoRepository},
     services::youtube_service::YoutubeService,
-    utils::consts::DEVELOPMENT,
 };
 
 const YOUTUBE_VIDEO_FEED_BASE_URL: &str = "https://www.youtube.com/feeds/videos.xml";
@@ -22,7 +21,6 @@ pub struct VideoScraper {
     video_repo: VideoRepository,
     channel_repo: ChannelRepository,
     youtube_service: YoutubeService,
-    environment: String,
 }
 
 impl VideoScraper {
@@ -30,13 +28,11 @@ impl VideoScraper {
         video_repo: VideoRepository,
         channel_repo: ChannelRepository,
         youtube_api_keys: Vec<String>,
-        environment: String,
     ) -> Self {
         Self {
             video_repo,
             channel_repo,
             youtube_service: YoutubeService::new(youtube_api_keys),
-            environment,
         }
     }
 
@@ -79,9 +75,8 @@ impl VideoScraper {
             }
 
             info!("Updating video {}", entry.video_id);
-            if self.environment.ne(DEVELOPMENT) {
-                self.video_repo.upsert(&entry.video_id, vid).await?;
-            }
+
+            self.video_repo.upsert(&entry.video_id, vid).await?;
         }
 
         self.update_channel_video_stats(&channel_id, max_last_upload_timestamp)
@@ -122,11 +117,10 @@ impl VideoScraper {
             .parse::<i64>()
             .unwrap_or_default();
 
-        let likes = video_details
-            .statistics
-            .like_count
-            .parse::<i64>()
-            .unwrap_or_default();
+        let likes = match &video_details.statistics.like_count {
+            Some(likes) => likes.parse::<i64>().unwrap_or_default(),
+            None => 0,
+        };
 
         let comments = video_details
             .statistics
@@ -176,14 +170,26 @@ fn should_update_video(
 async fn load_and_parse_video_feed(channel_id: &str) -> Result<YoutubeVideoFeedResponse, Error> {
     let feed_url = format!("{}?channel_id={}", YOUTUBE_VIDEO_FEED_BASE_URL, channel_id);
 
-    let xml = reqwest::get(&feed_url)
-        .await?
+    let response = reqwest::get(&feed_url).await?;
+
+    if response.status() != 200 {
+        return Err(anyhow!(
+            "Youtube Video Feed Response Error: {}",
+            response.status()
+        ));
+    }
+
+    let xml = response
         .text()
         .await?
         .replace("yt:", "yt")
         .replace("media:", "media");
 
-    let channel_feed = from_str::<YoutubeVideoFeedResponse>(&xml).expect(&feed_url);
+    let channel_feed = from_str::<YoutubeVideoFeedResponse>(&xml).expect(&format!(
+        "{}, xml string length {}",
+        &feed_url,
+        xml.len()
+    ));
 
     Ok(channel_feed)
 }

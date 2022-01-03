@@ -46,7 +46,7 @@ pub struct Status {
 #[serde(rename_all = "camelCase")]
 pub struct Statistics {
     pub view_count: String,
-    pub like_count: String,
+    pub like_count: Option<String>,
     pub favorite_count: String,
     pub comment_count: String,
 }

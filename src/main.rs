@@ -5,7 +5,7 @@ use figment::{
     providers::{Env, Format, Json},
     Figment,
 };
-use log::{debug, info, LevelFilter};
+use log::{debug, error, info, LevelFilter};
 use mongodb::{options::ClientOptions, Client};
 use repos::additional_channel_repo::AdditionalChannelRepository;
 use repos::blacklist_repo::BlacklistRepository;
@@ -120,7 +120,10 @@ fn register_additional_channel_crawler(
         let crawler = AdditionalChannelCrawler::new(tx, additional_channel_repo);
 
         info!("Start additional channel crawling");
-        crawler.crawl().await.unwrap();
+        crawler
+            .crawl()
+            .await
+            .expect("Panic in additional channel crawling");
     });
 
     tasks.push(additional_channel_crawling_task);
@@ -137,7 +140,11 @@ fn register_channel_update_crawler(
         let crawler = ChannelUpdateCrawler::new(tx, channel_repo);
 
         info!("Start channel update crawling");
-        crawler.crawl().await.unwrap();
+        let result = crawler.crawl().await;
+
+        if let Err(e) = result {
+            error!("Error in channel update crawling: {}", e);
+        }
     });
 
     tasks.push(channel_update_crawling_task);
@@ -154,7 +161,11 @@ fn register_new_video_crawler(
         let crawler = NewVideoCrawler::new(tx, channel_repo);
 
         info!("Start new video crawling");
-        crawler.crawl().await.unwrap();
+        let result = crawler.crawl().await;
+
+        if let Err(e) = result {
+            error!("Error in new video crawling: {}", e);
+        }
     });
 
     tasks.push(new_video_crawling_task);
@@ -189,14 +200,16 @@ fn register_channel_scraper(
             sailing_terms,
             blacklisted_channel_ids,
             config.youtube_api_keys,
-            config.environment,
         );
 
         while let Some(cmd) = rx.recv().await {
-            scraper
+            let result = scraper
                 .scrape(cmd.channel_id, cmd.ignore_sailing_terms)
-                .await
-                .unwrap();
+                .await;
+
+            if let Err(e) = result {
+                error!("Error in channel scraping: {}", e);
+            }
         }
     });
 
@@ -214,15 +227,14 @@ fn register_video_scraper(
 
         let video_repo = VideoRepository::new(&mongo_client, &config.environment);
         let channel_repo = ChannelRepository::new(&mongo_client, &config.environment);
-        let scraper = VideoScraper::new(
-            video_repo,
-            channel_repo,
-            config.youtube_api_keys,
-            config.environment,
-        );
+        let scraper = VideoScraper::new(video_repo, channel_repo, config.youtube_api_keys);
 
         while let Some(cmd) = rx.recv().await {
-            scraper.scrape(cmd.channel_id).await.unwrap();
+            let result = scraper.scrape(cmd.channel_id).await;
+
+            if let Err(e) = result {
+                error!("Error in video scraper: {}", e);
+            }
         }
     });
 
