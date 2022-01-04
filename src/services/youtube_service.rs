@@ -1,4 +1,4 @@
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use rand::Rng;
 
 use crate::models::{
@@ -10,15 +10,11 @@ const BASE_URL: &str = "https://www.googleapis.com/youtube/v3/";
 
 pub struct YoutubeService {
     api_keys: Vec<String>,
-    api_video_keys: Vec<String>,
 }
 
 impl YoutubeService {
-    pub fn new(api_keys: Vec<String>, api_video_keys: Vec<String>) -> YoutubeService {
-        YoutubeService {
-            api_keys,
-            api_video_keys,
-        }
+    pub fn new(api_keys: Vec<String>) -> YoutubeService {
+        YoutubeService { api_keys }
     }
 
     pub async fn get_channel_details(
@@ -45,15 +41,20 @@ impl YoutubeService {
             "{}videos?part=snippet,statistics,status&id={}&key={}",
             BASE_URL,
             video_id,
-            self.get_video_api_key()
+            self.get_api_key()
         );
 
-        let resp = reqwest::get(url)
-            .await?
-            .json::<YouTubeVideoDetails>()
-            .await?;
+        let resp = reqwest::get(url).await?;
 
-        Ok(resp.items[0].clone())
+        if !resp.status().is_success() {
+            return Err(anyhow!(
+                "Failed to get video details. Possibly out of quota"
+            ));
+        }
+
+        let video_details = resp.json::<YouTubeVideoDetails>().await?;
+
+        Ok(video_details.items[0].clone())
     }
 
     fn get_api_key(&self) -> String {
@@ -61,12 +62,5 @@ impl YoutubeService {
         let index = rng.gen_range(0..self.api_keys.len());
 
         self.api_keys[index].clone()
-    }
-
-    fn get_video_api_key(&self) -> String {
-        let mut rng = rand::thread_rng();
-        let index = rng.gen_range(0..self.api_video_keys.len());
-
-        self.api_video_keys[index].clone()
     }
 }

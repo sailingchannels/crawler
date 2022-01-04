@@ -28,12 +28,11 @@ impl VideoScraper {
         video_repo: VideoRepository,
         channel_repo: ChannelRepository,
         youtube_api_keys: Vec<String>,
-        youtube_video_api_keys: Vec<String>,
     ) -> Self {
         Self {
             video_repo,
             channel_repo,
-            youtube_service: YoutubeService::new(youtube_api_keys, youtube_video_api_keys),
+            youtube_service: YoutubeService::new(youtube_api_keys),
         }
     }
 
@@ -123,11 +122,10 @@ impl VideoScraper {
             None => 0,
         };
 
-        let comments = video_details
-            .statistics
-            .comment_count
-            .parse::<i64>()
-            .unwrap_or_default();
+        let comments = match &video_details.statistics.comment_count {
+            Some(comments) => comments.parse::<i64>().unwrap_or_default(),
+            None => 0,
+        };
 
         let mut vid = doc! {
             "_id": entry.video_id.clone(),

@@ -48,7 +48,7 @@ pub struct Statistics {
     pub view_count: String,
     pub like_count: Option<String>,
     pub favorite_count: String,
-    pub comment_count: String,
+    pub comment_count: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
