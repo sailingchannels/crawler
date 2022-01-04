@@ -45,6 +45,7 @@ pub async fn main() -> Result<(), anyhow::Error> {
         .extract()?;
 
     debug!("{:?}", config);
+    info!("Environment {}", config.environment);
 
     SimpleLogger::new()
         .with_level(LevelFilter::from_str(&config.log_level).unwrap())
