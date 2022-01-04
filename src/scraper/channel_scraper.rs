@@ -36,6 +36,7 @@ impl ChannelScraper {
         sailing_terms: Vec<String>,
         blacklisted_channel_ids: Vec<String>,
         youtube_api_keys: Vec<String>,
+        youtube_video_api_keys: Vec<String>,
     ) -> ChannelScraper {
         ChannelScraper {
             channel_repo,
@@ -43,7 +44,7 @@ impl ChannelScraper {
             subscriber_repo,
             video_repo,
             non_sailing_channel_repo,
-            youtube_service: YoutubeService::new(youtube_api_keys),
+            youtube_service: YoutubeService::new(youtube_api_keys, youtube_video_api_keys),
             sailing_terms,
             blacklisted_channel_ids,
         }

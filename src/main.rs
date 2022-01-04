@@ -200,6 +200,7 @@ fn register_channel_scraper(
             sailing_terms,
             blacklisted_channel_ids,
             config.youtube_api_keys,
+            config.youtube_video_api_keys,
         );
 
         while let Some(cmd) = rx.recv().await {
@@ -227,7 +228,12 @@ fn register_video_scraper(
 
         let video_repo = VideoRepository::new(&mongo_client, &config.environment);
         let channel_repo = ChannelRepository::new(&mongo_client, &config.environment);
-        let scraper = VideoScraper::new(video_repo, channel_repo, config.youtube_api_keys);
+        let scraper = VideoScraper::new(
+            video_repo,
+            channel_repo,
+            config.youtube_api_keys,
+            config.youtube_video_api_keys,
+        );
 
         while let Some(cmd) = rx.recv().await {
             let result = scraper.scrape(cmd.channel_id).await;

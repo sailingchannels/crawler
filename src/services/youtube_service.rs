@@ -10,11 +10,15 @@ const BASE_URL: &str = "https://www.googleapis.com/youtube/v3/";
 
 pub struct YoutubeService {
     api_keys: Vec<String>,
+    api_video_keys: Vec<String>,
 }
 
 impl YoutubeService {
-    pub fn new(api_keys: Vec<String>) -> YoutubeService {
-        YoutubeService { api_keys }
+    pub fn new(api_keys: Vec<String>, api_video_keys: Vec<String>) -> YoutubeService {
+        YoutubeService {
+            api_keys,
+            api_video_keys,
+        }
     }
 
     pub async fn get_channel_details(
@@ -41,7 +45,7 @@ impl YoutubeService {
             "{}videos?part=snippet,statistics,status&id={}&key={}",
             BASE_URL,
             video_id,
-            self.get_api_key()
+            self.get_video_api_key()
         );
 
         let resp = reqwest::get(url)
@@ -57,5 +61,12 @@ impl YoutubeService {
         let index = rng.gen_range(0..self.api_keys.len());
 
         self.api_keys[index].clone()
+    }
+
+    fn get_video_api_key(&self) -> String {
+        let mut rng = rand::thread_rng();
+        let index = rng.gen_range(0..self.api_video_keys.len());
+
+        self.api_video_keys[index].clone()
     }
 }

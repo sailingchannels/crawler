@@ -28,11 +28,12 @@ impl VideoScraper {
         video_repo: VideoRepository,
         channel_repo: ChannelRepository,
         youtube_api_keys: Vec<String>,
+        youtube_video_api_keys: Vec<String>,
     ) -> Self {
         Self {
             video_repo,
             channel_repo,
-            youtube_service: YoutubeService::new(youtube_api_keys),
+            youtube_service: YoutubeService::new(youtube_api_keys, youtube_video_api_keys),
         }
     }
 
