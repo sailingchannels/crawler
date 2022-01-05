@@ -16,6 +16,9 @@ use crate::{
 };
 
 const YOUTUBE_VIDEO_FEED_BASE_URL: &str = "https://www.youtube.com/feeds/videos.xml";
+const ONE_HOUR_IN_SECONDS: i64 = 3600;
+const ONE_DAY_IN_SECONDS: i64 = 86400;
+const ONE_WEEK_IN_SECONDS: i64 = 604800;
 
 pub struct VideoScraper {
     video_repo: VideoRepository,
@@ -44,9 +47,8 @@ impl VideoScraper {
 
         for entry in channel_feed.entries.iter() {
             let published = DateTime::parse_from_rfc3339(&entry.published)?;
-            let updated = DateTime::parse_from_rfc3339(&entry.updated).unwrap();
 
-            let should_update = should_update_video(&updated_lookup, entry, updated);
+            let should_update = should_update_video(&updated_lookup, entry, published);
             if !should_update {
                 continue;
             }
@@ -67,8 +69,7 @@ impl VideoScraper {
                 continue;
             }
 
-            let vid =
-                self.build_video_document(&channel_id, &entry, published, updated, &video_details);
+            let vid = self.build_video_document(&channel_id, &entry, published, &video_details);
 
             if published.timestamp() > max_last_upload_timestamp {
                 max_last_upload_timestamp = published.timestamp();
@@ -108,7 +109,6 @@ impl VideoScraper {
         channel_id: &str,
         entry: &Entry,
         published: DateTime<FixedOffset>,
-        updated: DateTime<FixedOffset>,
         video_details: &YouTubeVideoItem,
     ) -> Document {
         let views = video_details
@@ -132,12 +132,11 @@ impl VideoScraper {
             "title": entry.title.clone(),
             "description": entry.group.description.clone(),
             "publishedAt": published.timestamp(),
-            "updatedAt": updated.timestamp(),
+            "updatedAt": Utc::now().timestamp(),
             "views": views,
             "likes": likes,
             "comments": comments,
             "channel": channel_id.clone(),
-            "geoChecked": false,
             "tags": video_details.snippet.tags.clone().unwrap_or_default(),
         };
 
@@ -155,12 +154,31 @@ impl VideoScraper {
 fn should_update_video(
     updated_lookup: &HashMap<String, DateTime<Utc>>,
     entry: &Entry,
-    updated: DateTime<FixedOffset>,
+    published_at: DateTime<FixedOffset>,
 ) -> bool {
     let should_update = if !updated_lookup.contains_key(&entry.video_id) {
         true
     } else {
-        updated > updated_lookup[&entry.video_id]
+        let mut uploaded_later_than_threshold = ONE_HOUR_IN_SECONDS * 3;
+        let published_since_seconds = (Utc::now().timestamp() - published_at.timestamp()).abs();
+
+        if published_since_seconds >= ONE_WEEK_IN_SECONDS {
+            uploaded_later_than_threshold = ONE_DAY_IN_SECONDS;
+        }
+
+        if published_since_seconds >= 4 * ONE_WEEK_IN_SECONDS {
+            uploaded_later_than_threshold = ONE_WEEK_IN_SECONDS;
+        }
+
+        if published_since_seconds >= 6 * 4 * ONE_WEEK_IN_SECONDS {
+            uploaded_later_than_threshold = 4 * ONE_WEEK_IN_SECONDS;
+        }
+
+        let updated_at = updated_lookup.get(&entry.video_id).unwrap();
+        let updated_time_diff = (Utc::now().timestamp() - updated_at.timestamp()).abs();
+        let should_update_video = updated_time_diff >= uploaded_later_than_threshold;
+
+        should_update_video
     };
 
     should_update
