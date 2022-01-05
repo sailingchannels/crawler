@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 use tokio::time::sleep;
 
-const FIVE_MINUTES_IN_SECONDS: u64 = 5 * 60;
+const FIFTEEN_MINUTES_IN_SECONDS: u64 = 15 * 60;
 
 use crate::{
     commands::crawl_videos_command::CrawlVideosCommand, repos::channel_repo::ChannelRepository,
@@ -42,10 +42,10 @@ impl NewVideoCrawler {
 
             info!(
                 "Wait for {} seconds until next crawl",
-                FIVE_MINUTES_IN_SECONDS
+                FIFTEEN_MINUTES_IN_SECONDS
             );
 
-            sleep(Duration::from_secs(FIVE_MINUTES_IN_SECONDS)).await;
+            sleep(Duration::from_secs(FIFTEEN_MINUTES_IN_SECONDS)).await;
         }
     }
 }
