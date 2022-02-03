@@ -7,12 +7,8 @@ use mongodb::bson::{doc, Document};
 use quick_xml::de::from_str;
 
 use crate::{
-    models::{
-        youtube_video_details::YouTubeVideoItem,
-        youtube_video_feed_response::{Entry, YoutubeVideoFeedResponse},
-    },
+    models::youtube_video_feed_response::{Entry, YoutubeVideoFeedResponse},
     repos::{channel_repo::ChannelRepository, video_repo::VideoRepository},
-    services::youtube_service::YoutubeService,
 };
 
 const YOUTUBE_VIDEO_FEED_BASE_URL: &str = "https://www.youtube.com/feeds/videos.xml";
@@ -23,19 +19,13 @@ const ONE_WEEK_IN_SECONDS: i64 = 604800;
 pub struct VideoScraper {
     video_repo: VideoRepository,
     channel_repo: ChannelRepository,
-    youtube_service: YoutubeService,
 }
 
 impl VideoScraper {
-    pub fn new(
-        video_repo: VideoRepository,
-        channel_repo: ChannelRepository,
-        youtube_api_keys: Vec<String>,
-    ) -> Self {
+    pub fn new(video_repo: VideoRepository, channel_repo: ChannelRepository) -> Self {
         Self {
             video_repo,
             channel_repo,
-            youtube_service: YoutubeService::new(youtube_api_keys),
         }
     }
 
@@ -53,23 +43,7 @@ impl VideoScraper {
                 continue;
             }
 
-            let video_details = self
-                .youtube_service
-                .get_video_details(&entry.video_id)
-                .await?;
-
-            if video_details.status.privacy_status.ne("public") {
-                self.video_repo.delete(&channel_id).await?;
-
-                info!(
-                    "Video {} is private, delete if exists and skipping",
-                    entry.video_id
-                );
-
-                continue;
-            }
-
-            let vid = self.build_video_document(&channel_id, &entry, published, &video_details);
+            let vid = self.build_video_document(&channel_id, &entry, published);
 
             if published.timestamp() > max_last_upload_timestamp {
                 max_last_upload_timestamp = published.timestamp();
@@ -109,43 +83,16 @@ impl VideoScraper {
         channel_id: &str,
         entry: &Entry,
         published: DateTime<FixedOffset>,
-        video_details: &YouTubeVideoItem,
     ) -> Document {
-        let views = video_details
-            .statistics
-            .view_count
-            .parse::<i64>()
-            .unwrap_or_default();
-
-        let likes = match &video_details.statistics.like_count {
-            Some(likes) => likes.parse::<i64>().unwrap_or_default(),
-            None => 0,
-        };
-
-        let comments = match &video_details.statistics.comment_count {
-            Some(comments) => comments.parse::<i64>().unwrap_or_default(),
-            None => 0,
-        };
-
-        let mut vid = doc! {
+        let vid = doc! {
             "_id": entry.video_id.clone(),
             "title": entry.title.clone(),
             "description": entry.group.description.clone(),
             "publishedAt": published.timestamp(),
             "updatedAt": Utc::now().timestamp(),
-            "views": views,
-            "likes": likes,
-            "comments": comments,
+            "views": entry.group.community.statistics.views,
             "channel": channel_id.clone(),
-            "tags": video_details.snippet.tags.clone().unwrap_or_default(),
         };
-
-        if video_details.snippet.default_language.is_some() {
-            vid.insert(
-                "defaultLanguage",
-                video_details.snippet.default_language.clone().unwrap(),
-            );
-        }
 
         vid
     }

@@ -228,7 +228,7 @@ fn register_video_scraper(
 
         let video_repo = VideoRepository::new(&mongo_client, &config.environment);
         let channel_repo = ChannelRepository::new(&mongo_client, &config.environment);
-        let scraper = VideoScraper::new(video_repo, channel_repo, config.youtube_api_keys);
+        let scraper = VideoScraper::new(video_repo, channel_repo);
 
         while let Some(cmd) = rx.recv().await {
             let result = scraper.scrape(cmd.channel_id).await;

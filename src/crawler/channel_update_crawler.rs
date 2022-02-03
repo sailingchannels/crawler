@@ -10,7 +10,6 @@ use crate::{
 };
 
 const FIFTEEN_MINUTES_IN_SECONDS: u64 = 15 * 60;
-const ONE_DAY_IN_SECONDS: i64 = 86400;
 
 pub struct ChannelUpdateCrawler {
     channel_repo: ChannelRepository,
@@ -32,10 +31,11 @@ impl ChannelUpdateCrawler {
         loop {
             info!("Start channel update crawler");
 
-            let last_crawl_before = Utc::now() - chrono::Duration::seconds(ONE_DAY_IN_SECONDS + 1);
+            let last_crawl_before = Utc::now() - chrono::Duration::days(1);
+            let last_upload_after = Utc::now() - chrono::Duration::weeks(52);
             let channel_ids = self
                 .channel_repo
-                .get_ids_last_crawled_before(last_crawl_before)
+                .get_ids_last_crawled_before(last_crawl_before, last_upload_after)
                 .await?;
 
             info!("Found {} channels to update", channel_ids.len());
