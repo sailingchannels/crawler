@@ -19,7 +19,7 @@ pub struct PageInfo {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YoutubeStatisticsItem {
-    pub kind: String,
+    pub kind: Option<String>,
     pub etag: String,
     pub id: String,
     pub snippet: Snippet,

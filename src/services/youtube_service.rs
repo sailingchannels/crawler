@@ -1,10 +1,7 @@
-use anyhow::{anyhow, Error};
+use anyhow::Error;
 use rand::Rng;
 
-use crate::models::{
-    youtube_channel_details::{YouTubeChannelDetails, YoutubeStatisticsItem},
-    youtube_video_details::{YouTubeVideoDetails, YouTubeVideoItem},
-};
+use crate::models::youtube_channel_details::{YouTubeChannelDetails, YoutubeStatisticsItem};
 
 const BASE_URL: &str = "https://www.googleapis.com/youtube/v3/";
 
@@ -34,27 +31,6 @@ impl YoutubeService {
             .await?;
 
         Ok(resp.items[0].clone())
-    }
-
-    pub async fn get_video_details(&self, video_id: &str) -> Result<YouTubeVideoItem, Error> {
-        let url = format!(
-            "{}videos?part=snippet,statistics,status&id={}&key={}",
-            BASE_URL,
-            video_id,
-            self.get_api_key()
-        );
-
-        let resp = reqwest::get(url).await?;
-
-        if !resp.status().is_success() {
-            return Err(anyhow!(
-                "Failed to get video details. Possibly out of quota"
-            ));
-        }
-
-        let video_details = resp.json::<YouTubeVideoDetails>().await?;
-
-        Ok(video_details.items[0].clone())
     }
 
     fn get_api_key(&self) -> String {

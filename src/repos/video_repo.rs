@@ -53,12 +53,6 @@ impl VideoRepository {
         Ok(video_updated_lookup)
     }
 
-    pub async fn delete(&self, id: &str) -> Result<(), anyhow::Error> {
-        self.collection.delete_one(doc! {"_id": id}, None).await?;
-
-        Ok(())
-    }
-
     pub async fn delete_all_by_channel(&self, channel_id: &str) -> Result<(), anyhow::Error> {
         self.collection
             .delete_many(doc! {"channel": channel_id}, None)

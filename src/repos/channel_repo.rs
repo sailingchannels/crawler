@@ -1,5 +1,5 @@
 use anyhow::Error;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use futures::stream::TryStreamExt;
 use mongodb::bson::{doc, Document};
 use mongodb::options::{FindOneOptions, FindOptions};
@@ -37,21 +37,15 @@ impl ChannelRepository {
     pub async fn get_ids_last_crawled_before(
         &self,
         last_crawl_before: chrono::DateTime<Utc>,
-        last_upload_after: chrono::DateTime<Utc>,
+        _last_upload_after: chrono::DateTime<Utc>,
     ) -> Result<Vec<String>, Error> {
         let find_options = FindOptions::builder().projection(doc! { "_id": 1 }).build();
         let query = doc! {
-            "$and": [{
-                "lastCrawl": {
-                    "$lt": mongodb::bson::DateTime::from_millis(
-                        last_crawl_before.timestamp_millis(),
-                    )
-                },
-            }, {
-                "lastUpload": {
-                    "$gte": last_upload_after.timestamp()
-                }
-            }]
+            "lastCrawl": {
+                "$lt": mongodb::bson::DateTime::from_millis(
+                    last_crawl_before.timestamp_millis(),
+                )
+            }
         };
 
         let cursor = self.collection.find(query, find_options).await?;
