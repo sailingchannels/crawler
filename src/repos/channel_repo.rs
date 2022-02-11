@@ -39,7 +39,12 @@ impl ChannelRepository {
         last_crawl_before: chrono::DateTime<Utc>,
         _last_upload_after: chrono::DateTime<Utc>,
     ) -> Result<Vec<String>, Error> {
-        let find_options = FindOptions::builder().projection(doc! { "_id": 1 }).build();
+        let find_options = FindOptions::builder()
+            .projection(doc! { "_id": 1 })
+            .limit(100)
+            .sort(doc! { "lastCrawl": 1 })
+            .build();
+
         let query = doc! {
             "lastCrawl": {
                 "$lt": mongodb::bson::DateTime::from_millis(
