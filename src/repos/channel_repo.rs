@@ -41,7 +41,7 @@ impl ChannelRepository {
     ) -> Result<Vec<String>, Error> {
         let find_options = FindOptions::builder()
             .projection(doc! { "_id": 1 })
-            .limit(100)
+            .limit(200)
             .sort(doc! { "lastCrawl": 1 })
             .build();
 

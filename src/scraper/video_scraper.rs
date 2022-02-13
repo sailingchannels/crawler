@@ -137,6 +137,7 @@ async fn load_and_parse_video_feed(channel_id: &str) -> Result<YoutubeVideoFeedR
     let response = reqwest::get(&feed_url).await?;
 
     if response.status() != 200 {
+        println!("{}", feed_url);
         return Err(anyhow!(
             "Youtube Video Feed Response Error: {}",
             response.status()

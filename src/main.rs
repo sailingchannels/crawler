@@ -14,7 +14,6 @@ use simple_logger::SimpleLogger;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::{self, JoinHandle};
 
-use crate::scraper::channel_scraper::ChannelScraper;
 use crate::{
     commands::crawl_channel_command::CrawlChannelCommand,
     repos::{subscriber_repo::SubscriberRepository, view_repo::ViewRepository},
@@ -24,6 +23,7 @@ use crate::{
     crawler::channel_update_crawler::ChannelUpdateCrawler, repos::video_repo::VideoRepository,
 };
 use crate::{crawler::new_video_crawler::NewVideoCrawler, repos::channel_repo::ChannelRepository};
+use crate::{repos::apikeys_repo::ApiKeyRepository, scraper::channel_scraper::ChannelScraper};
 use crate::{
     repos::non_sailing_channel_repo::NonSailingChannelRepository,
     scraper::video_scraper::VideoScraper,
@@ -187,6 +187,7 @@ fn register_channel_scraper(
         let view_repo = ViewRepository::new(&mongo_client, &config.environment);
         let subscriber_repo = SubscriberRepository::new(&mongo_client, &config.environment);
         let video_repo = VideoRepository::new(&mongo_client, &config.environment);
+        let apikey_repo = ApiKeyRepository::new(&mongo_client, &config.environment);
 
         let sailing_terms = get_sailing_terms(&mongo_client, &config.environment).await;
         let blacklisted_channel_ids =
@@ -200,7 +201,7 @@ fn register_channel_scraper(
             non_sailing_channel_repo,
             sailing_terms,
             blacklisted_channel_ids,
-            config.youtube_api_keys,
+            apikey_repo,
         );
 
         while let Some(cmd) = rx.recv().await {

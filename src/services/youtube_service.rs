@@ -1,28 +1,30 @@
 use anyhow::Error;
-use rand::Rng;
 
-use crate::models::youtube_channel_details::{YouTubeChannelDetails, YoutubeStatisticsItem};
+use crate::{
+    models::youtube_channel_details::{YouTubeChannelDetails, YoutubeStatisticsItem},
+    repos::apikeys_repo::ApiKeyRepository,
+};
 
 const BASE_URL: &str = "https://www.googleapis.com/youtube/v3/";
 
 pub struct YoutubeService {
-    api_keys: Vec<String>,
+    apikey_repo: ApiKeyRepository,
 }
 
 impl YoutubeService {
-    pub fn new(api_keys: Vec<String>) -> YoutubeService {
-        YoutubeService { api_keys }
+    pub fn new(apikey_repo: ApiKeyRepository) -> YoutubeService {
+        YoutubeService { apikey_repo }
     }
 
     pub async fn get_channel_details(
         &self,
         channel_id: &str,
     ) -> Result<YoutubeStatisticsItem, Error> {
+        let api_key = self.apikey_repo.get_least_used_api_key().await?;
+
         let url = format!(
             "{}channels?part=snippet,brandingSettings,statistics&id={}&key={}",
-            BASE_URL,
-            channel_id,
-            self.get_api_key()
+            BASE_URL, channel_id, api_key.key
         );
 
         let resp = reqwest::get(url)
@@ -30,13 +32,11 @@ impl YoutubeService {
             .json::<YouTubeChannelDetails>()
             .await?;
 
-        Ok(resp.items[0].clone())
-    }
+        self.apikey_repo.update_usage(&api_key).await?;
 
-    fn get_api_key(&self) -> String {
-        let mut rng = rand::thread_rng();
-        let index = rng.gen_range(0..self.api_keys.len());
-
-        self.api_keys[index].clone()
+        match resp.items {
+            Some(items) => Ok(items[0].clone()),
+            None => Err(Error::msg("No items found")),
+        }
     }
 }

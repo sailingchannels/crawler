@@ -1,4 +1,5 @@
 pub mod additional_channel_repo;
+pub mod apikeys_repo;
 pub mod blacklist_repo;
 pub mod channel_repo;
 pub mod non_sailing_channel_repo;

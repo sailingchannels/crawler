@@ -7,7 +7,8 @@ use whatlang::detect;
 use crate::{
     models::youtube_channel_details::YoutubeStatisticsItem,
     repos::{
-        channel_repo::ChannelRepository, non_sailing_channel_repo::NonSailingChannelRepository,
+        apikeys_repo::ApiKeyRepository, channel_repo::ChannelRepository,
+        non_sailing_channel_repo::NonSailingChannelRepository,
         subscriber_repo::SubscriberRepository, video_repo::VideoRepository,
         view_repo::ViewRepository,
     },
@@ -35,7 +36,7 @@ impl ChannelScraper {
         non_sailing_channel_repo: NonSailingChannelRepository,
         sailing_terms: Vec<String>,
         blacklisted_channel_ids: Vec<String>,
-        youtube_api_keys: Vec<String>,
+        apikey_repo: ApiKeyRepository,
     ) -> ChannelScraper {
         ChannelScraper {
             channel_repo,
@@ -43,7 +44,7 @@ impl ChannelScraper {
             subscriber_repo,
             video_repo,
             non_sailing_channel_repo,
-            youtube_service: YoutubeService::new(youtube_api_keys),
+            youtube_service: YoutubeService::new(apikey_repo),
             sailing_terms,
             blacklisted_channel_ids,
         }

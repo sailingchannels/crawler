@@ -6,7 +6,7 @@ pub struct YouTubeChannelDetails {
     pub kind: String,
     pub etag: String,
     pub page_info: PageInfo,
-    pub items: Vec<YoutubeStatisticsItem>,
+    pub items: Option<Vec<YoutubeStatisticsItem>>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
