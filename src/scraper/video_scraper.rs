@@ -37,6 +37,9 @@ impl VideoScraper {
 
         for entry in channel_feed.entries.iter() {
             let published = DateTime::parse_from_rfc3339(&entry.published)?;
+            if published.timestamp() > max_last_upload_timestamp {
+                max_last_upload_timestamp = published.timestamp();
+            }
 
             let should_update = should_update_video(&updated_lookup, entry, published);
             if !should_update {
@@ -45,12 +48,7 @@ impl VideoScraper {
 
             let vid = self.build_video_document(&channel_id, &entry, published);
 
-            if published.timestamp() > max_last_upload_timestamp {
-                max_last_upload_timestamp = published.timestamp();
-            }
-
             info!("Updating video {}", entry.video_id);
-
             self.video_repo.upsert(&entry.video_id, vid).await?;
         }
 
