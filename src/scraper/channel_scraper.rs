@@ -210,12 +210,17 @@ impl ChannelScraper {
         let channel_language_result = self.channel_repo.get_detected_language(channel_id).await;
 
         let language_detected = channel_language_result.is_ok();
+        let supported_languages = vec![
+            "da", "nl", "en", "fi", "fr", "de", "hu", "it", "nb", "pt", "ro", "ru", "es", "sv",
+            "tr",
+        ];
 
         if language_detected == false && text.len() > 0 {
             match detect(text) {
                 Some(language) => {
-                    if language.is_reliable() {
-                        return Some(language.lang().code()[..2].to_string());
+                    let lang_code = &language.lang().code()[..2];
+                    if language.is_reliable() && supported_languages.contains(&lang_code) {
+                        return Some(lang_code.to_string());
                     }
                 }
                 None => {
