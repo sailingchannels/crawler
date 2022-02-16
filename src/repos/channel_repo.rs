@@ -53,7 +53,7 @@ impl ChannelRepository {
                     )
                 },
             }, {
-                "lastUpload": {
+                "lastUploadAt": {
                     "$gte": last_upload_after.timestamp()
                 }
             }]
