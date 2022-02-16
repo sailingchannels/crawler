@@ -24,7 +24,7 @@ impl ApiKeyRepository {
 
     pub async fn get_least_used_api_key(&self) -> Result<ApiKey, Error> {
         let find_options = FindOneOptions::builder()
-            .sort(doc! { "used_quota": 1 })
+            .sort(doc! { "pdt_day": 1, "used_quota": 1 })
             .build();
 
         let doc = self
