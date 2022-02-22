@@ -1,6 +1,9 @@
 use std::str::FromStr;
 
-use crawler::additional_channel_crawler::AdditionalChannelCrawler;
+use crawler::{
+    additional_channel_crawler::AdditionalChannelCrawler,
+    channel_discovery_crawler::ChannelDiscoveryCrawler,
+};
 use figment::{
     providers::{Env, Format, Json},
     Figment,
@@ -17,6 +20,7 @@ use tokio::task::{self, JoinHandle};
 use crate::{
     commands::crawl_channel_command::CrawlChannelCommand,
     repos::{subscriber_repo::SubscriberRepository, view_repo::ViewRepository},
+    services::sailing_terms_service::SailingTermsService,
 };
 use crate::{commands::crawl_videos_command::CrawlVideosCommand, models::config::Config};
 use crate::{
@@ -84,6 +88,13 @@ pub async fn main() -> Result<(), anyhow::Error> {
         channel_scraper_tx.clone(),
     );
 
+    register_channel_discovery_crawler(
+        &mut tasks,
+        db_client.clone(),
+        config.clone(),
+        channel_scraper_tx.clone(),
+    );
+
     register_channel_update_crawler(
         &mut tasks,
         db_client.clone(),
@@ -128,6 +139,25 @@ fn register_additional_channel_crawler(
     });
 
     tasks.push(additional_channel_crawling_task);
+}
+
+fn register_channel_discovery_crawler(
+    tasks: &mut Vec<JoinHandle<()>>,
+    mongo_client: Client,
+    config: Config,
+    tx: Sender<CrawlChannelCommand>,
+) {
+    let channel_discovery_crawling_task = task::spawn(async move {
+        let channel_repo = ChannelRepository::new(&mongo_client, &config.environment);
+
+        let crawler = ChannelDiscoveryCrawler::new(tx, channel_repo);
+
+        info!("Start channel discovery crawling");
+        crawler
+            .crawl()
+            .await
+            .expect("Panic in channel discovery crawling");
+    });
 }
 
 fn register_channel_update_crawler(
@@ -193,15 +223,19 @@ fn register_channel_scraper(
         let blacklisted_channel_ids =
             get_blacklisted_channels(&mongo_client, &config.environment).await;
 
+        let sailing_terms_service = SailingTermsService::new(
+            sailing_terms,
+            blacklisted_channel_ids,
+            non_sailing_channel_repo,
+        );
+
         let scraper = ChannelScraper::new(
             channel_repo,
             view_repo,
             subscriber_repo,
             video_repo,
-            non_sailing_channel_repo,
-            sailing_terms,
-            blacklisted_channel_ids,
             apikey_repo,
+            sailing_terms_service,
         );
 
         while let Some(cmd) = rx.recv().await {

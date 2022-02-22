@@ -1,3 +1,4 @@
+use anyhow::Error;
 use mongodb::bson::{doc, DateTime, Document};
 use mongodb::{Client, Collection};
 
@@ -15,6 +16,15 @@ impl NonSailingChannelRepository {
         NonSailingChannelRepository {
             collection: channels,
         }
+    }
+
+    pub async fn exists(&self, channel_id: &str) -> Result<bool, Error> {
+        let result = self
+            .collection
+            .count_documents(doc! { "_id": channel_id }, None)
+            .await?;
+
+        Ok(result > 0)
     }
 
     pub async fn upsert(&self, channel_id: &str) {
