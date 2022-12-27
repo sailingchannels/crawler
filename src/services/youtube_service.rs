@@ -1,5 +1,4 @@
 use anyhow::Error;
-use log::info;
 
 use crate::{
     models::{
