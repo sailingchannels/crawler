@@ -43,13 +43,20 @@ impl ChannelRepository {
         Ok(channel_ids)
     }
 
-    pub async fn get_ids_upload_last_three_month(&self) -> Result<Vec<String>, Error> {
+    pub async fn get_ids_upload_last_month(
+        &self,
+        min_subscribers_count: i64,
+    ) -> Result<Vec<String>, Error> {
         let find_options = FindOptions::builder().projection(doc! { "_id": 1 }).build();
-        let three_month_ago = Utc::now() - chrono::Duration::weeks(4);
+
+        let one_month_ago = Utc::now() - chrono::Duration::weeks(4);
 
         let query = doc! {
             "lastUploadAt": {
-                "$gte": three_month_ago.timestamp()
+                "$gte": one_month_ago.timestamp()
+            },
+            "subscribers": {
+                "$gte": min_subscribers_count
             }
         };
 

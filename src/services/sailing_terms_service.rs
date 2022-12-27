@@ -24,6 +24,16 @@ impl SailingTermsService {
         }
     }
 
+    pub async fn is_not_listed_as_non_sailing_channel(&self, channel_id: &str) -> bool {
+        let non_sailing_channel_exists = self
+            .non_sailing_channel_repo
+            .exists(channel_id)
+            .await
+            .unwrap_or(false);
+
+        !non_sailing_channel_exists
+    }
+
     pub async fn has_sailing_term(
         &self,
         channel_id: &str,

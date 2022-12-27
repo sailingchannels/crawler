@@ -4,9 +4,10 @@ use crate::{
     commands::crawl_channel_command::CrawlChannelCommand,
     repos::{
         additional_channel_repo::AdditionalChannelRepository, channel_repo::ChannelRepository,
-        non_sailing_channel_repo::NonSailingChannelRepository, settings_repo::SettingsRepository,
+        settings_repo::SettingsRepository,
     },
     services::{sailing_terms_service::SailingTermsService, youtube_service::YoutubeService},
+    utils::consts::ONE_DAYS_IN_SECONDS,
 };
 use anyhow::Error;
 use chrono::Utc;
@@ -15,8 +16,6 @@ use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 use tokio::time::sleep;
 
-const ONE_DAYS_IN_SECONDS: u64 = 86400;
-
 pub struct ChannelDiscoveryCrawler {
     sender: Sender<CrawlChannelCommand>,
     channel_repo: ChannelRepository,
@@ -24,7 +23,6 @@ pub struct ChannelDiscoveryCrawler {
     youtube_service: YoutubeService,
     sailing_terms_service: SailingTermsService,
     additional_channel_repo: AdditionalChannelRepository,
-    non_sailing_channel_repo: NonSailingChannelRepository,
 }
 
 impl ChannelDiscoveryCrawler {
@@ -35,7 +33,6 @@ impl ChannelDiscoveryCrawler {
         youtube_service: YoutubeService,
         sailing_terms_service: SailingTermsService,
         additional_channel_repo: AdditionalChannelRepository,
-        non_sailing_channel_repo: NonSailingChannelRepository,
     ) -> ChannelDiscoveryCrawler {
         ChannelDiscoveryCrawler {
             sender,
@@ -44,7 +41,6 @@ impl ChannelDiscoveryCrawler {
             youtube_service,
             sailing_terms_service,
             additional_channel_repo,
-            non_sailing_channel_repo,
         }
     }
 
@@ -53,7 +49,7 @@ impl ChannelDiscoveryCrawler {
 
         loop {
             if self.should_crawl().await.unwrap_or(false) {
-                let channel_ids = self.channel_repo.get_ids_upload_last_three_month().await?;
+                let channel_ids = self.channel_repo.get_ids_upload_last_month(8000).await?;
 
                 for channel_id in channel_ids {
                     info!("Check subscriptions of channel {}", channel_id);
@@ -61,7 +57,8 @@ impl ChannelDiscoveryCrawler {
                     let subscriptions = self
                         .youtube_service
                         .get_channel_subscriptions(&channel_id)
-                        .await?;
+                        .await
+                        .unwrap_or(vec![]);
 
                     for snippet in subscriptions {
                         let sailing_terms_result = self
@@ -78,8 +75,10 @@ impl ChannelDiscoveryCrawler {
                             .is_channel_newly_discovered(&snippet.channel_id)
                             .await?;
 
-                        let is_not_non_sailing_channel =
-                            self.is_not_non_sailing_channel(&snippet.channel_id).await?;
+                        let is_not_non_sailing_channel = self
+                            .sailing_terms_service
+                            .is_not_listed_as_non_sailing_channel(&snippet.channel_id)
+                            .await;
 
                         if is_newly_discovered
                             && is_not_non_sailing_channel
@@ -96,6 +95,11 @@ impl ChannelDiscoveryCrawler {
                         }
                     }
                 }
+
+                let crawl_timestamp = Utc::now().timestamp();
+                self.settings_repo
+                    .set_last_discovery_crawl(crawl_timestamp)
+                    .await;
             }
 
             info!("Wait for {} seconds until next crawl", ONE_DAYS_IN_SECONDS);
@@ -105,8 +109,16 @@ impl ChannelDiscoveryCrawler {
     }
 
     async fn should_crawl(&self) -> Result<bool, Error> {
-        let last_crawl_timestamp = self.settings_repo.get_last_subscriber_crawl().await?;
+        let last_crawl_timestamp = self.settings_repo.get_last_discovery_crawl().await?;
+
         let seconds_since_last_crawl = Utc::now().timestamp() - last_crawl_timestamp;
+        info!(
+            "{} - {} = {}, {}",
+            Utc::now().timestamp(),
+            last_crawl_timestamp,
+            seconds_since_last_crawl,
+            seconds_since_last_crawl >= ONE_DAYS_IN_SECONDS as i64
+        );
 
         Ok(seconds_since_last_crawl >= ONE_DAYS_IN_SECONDS as i64)
     }
@@ -116,11 +128,5 @@ impl ChannelDiscoveryCrawler {
         let additional_exists = self.additional_channel_repo.exists(channel_id).await?;
 
         Ok(!channel_exists && !additional_exists)
-    }
-
-    async fn is_not_non_sailing_channel(&self, channel_id: &str) -> Result<bool, Error> {
-        let non_sailing_channel_exists = self.non_sailing_channel_repo.exists(channel_id).await?;
-
-        Ok(!non_sailing_channel_exists)
     }
 }

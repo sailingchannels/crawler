@@ -19,8 +19,11 @@ use tokio::task::{self, JoinHandle};
 
 use crate::{
     commands::crawl_channel_command::CrawlChannelCommand,
-    repos::{subscriber_repo::SubscriberRepository, view_repo::ViewRepository},
-    services::sailing_terms_service::SailingTermsService,
+    repos::{
+        settings_repo::SettingsRepository, subscriber_repo::SubscriberRepository,
+        view_repo::ViewRepository,
+    },
+    services::{sailing_terms_service::SailingTermsService, youtube_service::YoutubeService},
 };
 use crate::{commands::crawl_videos_command::CrawlVideosCommand, models::config::Config};
 use crate::{
@@ -126,12 +129,16 @@ fn register_additional_channel_crawler(
     config: Config,
     tx: Sender<CrawlChannelCommand>,
 ) {
+    if config.crawler.additional == false {
+        return;
+    }
+
     let additional_channel_crawling_task = task::spawn(async move {
         let additional_channel_repo =
             AdditionalChannelRepository::new(&mongo_client, &config.environment);
         let crawler = AdditionalChannelCrawler::new(tx, additional_channel_repo);
 
-        info!("Start additional channel crawling");
+        info!("CRAWLER: Start additional channel crawling");
         crawler
             .crawl()
             .await
@@ -147,17 +154,47 @@ fn register_channel_discovery_crawler(
     config: Config,
     tx: Sender<CrawlChannelCommand>,
 ) {
+    if config.crawler.discovery == false {
+        return;
+    }
+
     let channel_discovery_crawling_task = task::spawn(async move {
+        let sailing_terms = get_sailing_terms(&mongo_client, &config.environment).await;
+        let blacklisted_channel_ids =
+            get_blacklisted_channels(&mongo_client, &config.environment).await;
+
         let channel_repo = ChannelRepository::new(&mongo_client, &config.environment);
+        let settings_repo = SettingsRepository::new(&mongo_client, &config.environment);
+        let apikey_repo = ApiKeyRepository::new(&mongo_client, &config.environment);
+        let non_sailing_channel_repo =
+            NonSailingChannelRepository::new(&mongo_client, &config.environment);
+        let additional_channel_repo =
+            AdditionalChannelRepository::new(&mongo_client, &config.environment);
 
-        let crawler = ChannelDiscoveryCrawler::new(tx, channel_repo);
+        let youtube_service = YoutubeService::new(apikey_repo);
+        let sailing_terms_service = SailingTermsService::new(
+            sailing_terms,
+            blacklisted_channel_ids,
+            non_sailing_channel_repo,
+        );
 
-        info!("Start channel discovery crawling");
+        let crawler = ChannelDiscoveryCrawler::new(
+            tx,
+            channel_repo,
+            settings_repo,
+            youtube_service,
+            sailing_terms_service,
+            additional_channel_repo,
+        );
+
+        info!("CRAWLER: Start channel discovery crawling");
         crawler
             .crawl()
             .await
             .expect("Panic in channel discovery crawling");
     });
+
+    tasks.push(channel_discovery_crawling_task);
 }
 
 fn register_channel_update_crawler(
@@ -166,11 +203,15 @@ fn register_channel_update_crawler(
     config: Config,
     tx: Sender<CrawlChannelCommand>,
 ) {
+    if config.crawler.channel == false {
+        return;
+    }
+
     let channel_update_crawling_task = task::spawn(async move {
         let channel_repo = ChannelRepository::new(&mongo_client, &config.environment);
         let crawler = ChannelUpdateCrawler::new(tx, channel_repo);
 
-        info!("Start channel update crawling");
+        info!("CRAWLER: Start channel update crawling");
         let result = crawler.crawl().await;
 
         if let Err(e) = result {
@@ -187,11 +228,15 @@ fn register_new_video_crawler(
     config: Config,
     tx: Sender<CrawlVideosCommand>,
 ) {
+    if config.crawler.video == false {
+        return;
+    }
+
     let new_video_crawling_task = task::spawn(async move {
         let channel_repo = ChannelRepository::new(&mongo_client, &config.environment);
         let crawler = NewVideoCrawler::new(tx, channel_repo);
 
-        info!("Start new video crawling");
+        info!("CRAWLER: Start new video crawling");
         let result = crawler.crawl().await;
 
         if let Err(e) = result {
@@ -209,7 +254,7 @@ fn register_channel_scraper(
     mut rx: Receiver<CrawlChannelCommand>,
 ) {
     let channel_scraper_task = task::spawn(async move {
-        info!("Start channel scrape listener");
+        info!("SCRAPER: Start channel scrape listener");
 
         let channel_repo = ChannelRepository::new(&mongo_client, &config.environment);
         let non_sailing_channel_repo =
@@ -259,7 +304,7 @@ fn register_video_scraper(
     mut rx: Receiver<CrawlVideosCommand>,
 ) {
     let video_scraper_task = task::spawn(async move {
-        info!("Start video scrape listener");
+        info!("SCRAPER: Start video scrape listener");
 
         let video_repo = VideoRepository::new(&mongo_client, &config.environment);
         let channel_repo = ChannelRepository::new(&mongo_client, &config.environment);

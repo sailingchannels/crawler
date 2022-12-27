@@ -7,37 +7,34 @@
 		{
 			"type": "lldb",
 			"request": "launch",
-			"name": "Debug executable 'sailing-channels-crawler'",
+			"name": "Debug executable 'crawler'",
 			"cargo": {
 				"args": [
 					"build",
-					"--bin=sailing-channels-crawler",
-					"--package=sailing-channels-crawler"
+					"--bin=crawler",
+					"--package=crawler"
 				],
 				"filter": {
-					"name": "sailing-channels-crawler",
+					"name": "crawler",
 					"kind": "bin"
 				}
 			},
 			"args": [],
-			"env": {
-				"RUST_BACKTRACE": "full"
-			},
 			"cwd": "${workspaceFolder}"
 		},
 		{
 			"type": "lldb",
 			"request": "launch",
-			"name": "Debug unit tests in executable 'sailing-channels-crawler'",
+			"name": "Debug unit tests in executable 'crawler'",
 			"cargo": {
 				"args": [
 					"test",
 					"--no-run",
-					"--bin=sailing-channels-crawler",
-					"--package=sailing-channels-crawler"
+					"--bin=crawler",
+					"--package=crawler"
 				],
 				"filter": {
-					"name": "sailing-channels-crawler",
+					"name": "crawler",
 					"kind": "bin"
 				}
 			},

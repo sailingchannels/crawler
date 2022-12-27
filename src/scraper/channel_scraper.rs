@@ -68,7 +68,7 @@ impl ChannelScraper {
             .await;
 
         if sailing_term_result.is_blacklisted {
-            self.delete_channel(&channel_id).await;
+            self.delete_channel(&channel_id).await?;
         }
 
         let view_count = channel_details
