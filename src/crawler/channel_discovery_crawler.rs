@@ -110,15 +110,7 @@ impl ChannelDiscoveryCrawler {
 
     async fn should_crawl(&self) -> Result<bool, Error> {
         let last_crawl_timestamp = self.settings_repo.get_last_discovery_crawl().await?;
-
         let seconds_since_last_crawl = Utc::now().timestamp() - last_crawl_timestamp;
-        info!(
-            "{} - {} = {}, {}",
-            Utc::now().timestamp(),
-            last_crawl_timestamp,
-            seconds_since_last_crawl,
-            seconds_since_last_crawl >= ONE_DAYS_IN_SECONDS as i64
-        );
 
         Ok(seconds_since_last_crawl >= ONE_DAYS_IN_SECONDS as i64)
     }
