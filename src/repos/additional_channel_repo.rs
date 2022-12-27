@@ -17,6 +17,15 @@ impl AdditionalChannelRepository {
         AdditionalChannelRepository { collection: feeds }
     }
 
+    pub async fn exists(&self, channel_id: &str) -> Result<bool, Error> {
+        let result = self
+            .collection
+            .count_documents(doc! { "_id": channel_id }, None)
+            .await?;
+
+        Ok(result > 0)
+    }
+
     pub async fn get_all(&self) -> Result<Vec<Document>, Error> {
         let cursor = self.collection.find(None, None).await?;
         let additional_channels: Vec<Document> = cursor.try_collect().await?;

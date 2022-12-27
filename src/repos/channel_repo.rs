@@ -21,9 +21,46 @@ impl ChannelRepository {
         }
     }
 
+    pub async fn exists(&self, channel_id: &str) -> Result<bool, Error> {
+        let result = self
+            .collection
+            .count_documents(doc! { "_id": channel_id }, None)
+            .await?;
+
+        Ok(result > 0)
+    }
+
     pub async fn get_all_ids(&self) -> Result<Vec<String>, Error> {
         let find_options = FindOptions::builder().projection(doc! { "_id": 1 }).build();
         let cursor = self.collection.find(None, find_options).await?;
+        let channels: Vec<Document> = cursor.try_collect().await?;
+
+        let channel_ids = channels
+            .iter()
+            .map(|doc| doc.get_str("_id").unwrap().to_string())
+            .collect();
+
+        Ok(channel_ids)
+    }
+
+    pub async fn get_ids_upload_last_month(
+        &self,
+        min_subscribers_count: i64,
+    ) -> Result<Vec<String>, Error> {
+        let find_options = FindOptions::builder().projection(doc! { "_id": 1 }).build();
+
+        let one_month_ago = Utc::now() - chrono::Duration::weeks(4);
+
+        let query = doc! {
+            "lastUploadAt": {
+                "$gte": one_month_ago.timestamp()
+            },
+            "subscribers": {
+                "$gte": min_subscribers_count
+            }
+        };
+
+        let cursor = self.collection.find(query, find_options).await?;
         let channels: Vec<Document> = cursor.try_collect().await?;
 
         let channel_ids = channels

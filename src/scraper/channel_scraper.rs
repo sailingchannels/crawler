@@ -8,11 +8,10 @@ use crate::{
     models::youtube_channel_details::YoutubeStatisticsItem,
     repos::{
         apikeys_repo::ApiKeyRepository, channel_repo::ChannelRepository,
-        non_sailing_channel_repo::NonSailingChannelRepository,
         subscriber_repo::SubscriberRepository, video_repo::VideoRepository,
         view_repo::ViewRepository,
     },
-    services::youtube_service::YoutubeService,
+    services::{sailing_terms_service::SailingTermsService, youtube_service::YoutubeService},
     utils::keyword_utils,
 };
 
@@ -21,10 +20,8 @@ pub struct ChannelScraper {
     view_repo: ViewRepository,
     subscriber_repo: SubscriberRepository,
     video_repo: VideoRepository,
-    non_sailing_channel_repo: NonSailingChannelRepository,
     youtube_service: YoutubeService,
-    sailing_terms: Vec<String>,
-    blacklisted_channel_ids: Vec<String>,
+    sailing_terms_service: SailingTermsService,
 }
 
 impl ChannelScraper {
@@ -33,20 +30,16 @@ impl ChannelScraper {
         view_repo: ViewRepository,
         subscriber_repo: SubscriberRepository,
         video_repo: VideoRepository,
-        non_sailing_channel_repo: NonSailingChannelRepository,
-        sailing_terms: Vec<String>,
-        blacklisted_channel_ids: Vec<String>,
         apikey_repo: ApiKeyRepository,
+        sailing_terms_service: SailingTermsService,
     ) -> ChannelScraper {
         ChannelScraper {
             channel_repo,
             view_repo,
             subscriber_repo,
             video_repo,
-            non_sailing_channel_repo,
             youtube_service: YoutubeService::new(apikey_repo),
-            sailing_terms,
-            blacklisted_channel_ids,
+            sailing_terms_service,
         }
     }
 
@@ -64,7 +57,8 @@ impl ChannelScraper {
 
         let description = channel_details.snippet.description.unwrap_or_default();
 
-        let has_sailing_term = self
+        let sailing_term_result = self
+            .sailing_terms_service
             .has_sailing_term(
                 &channel_id,
                 &channel_details.snippet.title,
@@ -73,13 +67,17 @@ impl ChannelScraper {
             )
             .await;
 
+        if sailing_term_result.is_blacklisted {
+            self.delete_channel(&channel_id).await?;
+        }
+
         let view_count = channel_details
             .statistics
             .view_count
             .parse::<i64>()
             .unwrap_or(0);
 
-        if has_sailing_term == false || view_count == 0 {
+        if sailing_term_result.has_sailing_term == false || view_count == 0 {
             return Ok(());
         }
 
@@ -158,43 +156,6 @@ impl ChannelScraper {
         };
 
         Ok(channel_details)
-    }
-
-    async fn has_sailing_term(
-        &self,
-        channel_id: &str,
-        channel_title: &str,
-        channel_description: &str,
-        ignore_sailing_terms: bool,
-    ) -> bool {
-        let mut has_sailing_term = false;
-
-        for term in &self.sailing_terms {
-            if channel_title.to_lowercase().contains(term)
-                || channel_description.to_lowercase().contains(term)
-            {
-                has_sailing_term = true;
-                break;
-            }
-        }
-
-        if has_sailing_term == false && ignore_sailing_terms == false {
-            self.non_sailing_channel_repo.upsert(&channel_id).await;
-        }
-
-        if ignore_sailing_terms == true {
-            has_sailing_term = true;
-        }
-
-        if self
-            .blacklisted_channel_ids
-            .contains(&channel_id.to_string())
-        {
-            has_sailing_term = false;
-            self.delete_channel(channel_id).await.unwrap();
-        }
-
-        has_sailing_term
     }
 
     async fn delete_channel(&self, channel_id: &str) -> Result<(), Error> {
