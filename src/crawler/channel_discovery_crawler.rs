@@ -61,10 +61,12 @@ impl ChannelDiscoveryCrawler {
                         .unwrap_or(vec![]);
 
                     for snippet in subscriptions {
+                        let sub_channel_id = snippet.resource_id.channel_id;
+                        
                         let sailing_terms_result = self
                             .sailing_terms_service
                             .has_sailing_term(
-                                &snippet.channel_id,
+                                &sub_channel_id,
                                 &snippet.title,
                                 &snippet.description,
                                 false,
@@ -72,22 +74,22 @@ impl ChannelDiscoveryCrawler {
                             .await;
 
                         let is_newly_discovered = self
-                            .is_channel_newly_discovered(&snippet.channel_id)
+                            .is_channel_newly_discovered(&sub_channel_id)
                             .await?;
 
                         let is_not_non_sailing_channel = self
                             .sailing_terms_service
-                            .is_not_listed_as_non_sailing_channel(&snippet.channel_id)
+                            .is_not_listed_as_non_sailing_channel(&sub_channel_id)
                             .await;
 
                         if is_newly_discovered
                             && is_not_non_sailing_channel
                             && sailing_terms_result.has_sailing_term
                         {
-                            info!("Send channel for crawling: {}", snippet.channel_id);
+                            info!("Send channel for crawling: {}", sub_channel_id);
 
                             let cmd = CrawlChannelCommand {
-                                channel_id: snippet.channel_id.clone(),
+                                channel_id: sub_channel_id.clone(),
                                 ignore_sailing_terms: false,
                             };
 
