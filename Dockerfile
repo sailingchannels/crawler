@@ -20,7 +20,7 @@ RUN rm ./target/release/deps/crawler*
 RUN cargo build --release
 
 # our final base
-FROM debian:buster-slim
+FROM debian:bullseye
 
 RUN apt update
 RUN apt install openssl apt-transport-https ca-certificates -y
